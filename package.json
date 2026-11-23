@@ -1,0 +1,14 @@
+{
+  "name": "touchline-tactics",
+  "version": "1.0.0",
+  "description": "A turn-based football game for the browser. Open index.html to play.",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "sim": "node tools/sim.js 200",
+    "balance": "node tools/balance.js 10",
+    "exploits": "node tools/exploits.js 24 normal",
+    "dev": "node tools/serve.js"
+  },
+  "license": "MIT"
+}

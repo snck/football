@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Touchline Tactics</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="scorebar">
+    <div class="team home"><span class="chip" id="chipH"></span><span class="tname" id="nameH">Home</span></div>
+    <div class="score"><span id="scoreH">0</span><span class="dash">–</span><span id="scoreA">0</span></div>
+    <div class="team away"><span class="tname" id="nameA">Away</span><span class="chip" id="chipA"></span></div>
+    <div class="clockbox"><span id="clock">1'</span><span id="half">1st half</span><span id="added" class="hidden">+0</span></div>
+    <div id="momentum" title="Momentum: who is on top right now">
+      <div class="mbar"><div class="mfill" id="mfill"></div><div class="mmid"></div></div>
+      <label>Momentum</label>
+    </div>
+    <div class="topbtns">
+      <button id="btnHelp" title="How to play (H)">? Help</button>
+      <button id="btnPause" title="Pause menu (Esc)">❚❚ Menu</button>
+    </div>
+  </header>
+  <main>
+    <div id="pitchWrap"><canvas id="pitch"></canvas></div>
+    <aside id="side">
+      <div id="phase" class="phase">Welcome</div>
+      <div id="modes"></div>
+      <div id="extra"></div>
+      <div id="preview" class="preview"></div>
+      <div id="actions">
+        <button id="btnGo" class="primary">Confirm</button>
+        <button id="btnAlt">Hold shape</button>
+      </div>
+      <div id="mini"></div>
+      <div id="feedTitle">Commentary</div>
+      <div id="feed"></div>
+    </aside>
+  </main>
+  <footer id="hint">…</footer>
+</div>
+
+<!-- Main menu -->
+<div id="menu" class="overlay">
+  <div class="panel wide">
+    <h1>Touchline <span>Tactics</span></h1>
+    <p class="tag">Turn-based football. Read the space, pick your moment — no reflexes required.</p>
+    <h3>Your team</h3>
+    <div id="teamPick" class="cards"></div>
+    <h3>Opponent</h3>
+    <div id="oppPick" class="cards small"></div>
+    <div class="row">
+      <div><h3>Difficulty</h3><div class="seg" id="diffPick"></div></div>
+      <div><h3>Match length</h3><div class="seg" id="lenPick"></div></div>
+    </div>
+    <div class="row end">
+      <button id="btnHow">How to play</button>
+      <button id="btnStart" class="primary big">Kick off ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- How to play -->
+<div id="help" class="overlay hidden">
+  <div class="panel wide">
+    <h2>How to play</h2>
+    <div class="cols">
+      <div>
+        <h4>The beat</h4>
+        <p>Every turn is a short passage of play. First the side <b>without</b> the ball sets its trap. Then the side <b>with</b> the ball sees exactly where everyone is and chooses one action. Then it plays out. You always have unlimited time. Nothing is timed.</p>
+        <h4>With the ball (you attack left → right)</h4>
+        <ul>
+          <li><kbd>1</kbd> <b>Pass</b>: click a teammate. The % badges show the odds.</li>
+          <li><kbd>2</kbd> <b>Through ball</b>: click space ahead of a runner. They race the defenders to it.</li>
+          <li><kbd>3</kbd> <b>Lofted / Cross</b>: click a teammate or a spot. It goes over the lines but is contested in the air. Crosses into the box become headers.</li>
+          <li><kbd>4</kbd> <b>Dribble</b>: click inside the ring. Defenders near your path may tackle.</li>
+          <li><kbd>5</kbd> <b>Shoot</b>: the goal chance is shown before you commit.</li>
+          <li><kbd>6</kbd> <b>Clear</b>: hoof it long when you are in trouble.</li>
+        </ul>
+        <p>Click once to preview, then click again or press <kbd>Enter</kbd> to commit. <kbd>Esc</kbd> cancels.</p>
+        <p><b>Quick play:</b> after a completed pass you may play <b>first-time</b>, before the defence resets. It is 5% less accurate and you can't dribble. Or press <kbd>Space</kbd> to take a touch and let the defence reorganise.</p>
+      </div>
+      <div>
+        <h4>Without the ball</h4>
+        <ul>
+          <li><kbd>1</kbd> <b>Press</b>: click one of your players inside the big ring. They close the carrier down, which makes every option harder for them, but leaves a gap behind.</li>
+          <li><kbd>2</kbd> <b>Tackle</b>: click a player inside the small ring to lunge now. You might win it, give a foul (or a penalty in the box), or get beaten.</li>
+          <li><kbd>3</kbd> <b>Mark</b>: click a dangerous opponent. Your nearest player tight-marks them. The red rings show who the CPU wants to find.</li>
+          <li><kbd>T</kbd> <b>Offside trap</b>: your back line steps up. It catches runners on the line but leaves space in behind.</li>
+          <li><b>Line height</b> (<kbd>Q</kbd>/<kbd>W</kbd>/<kbd>E</kbd>): deep, normal or high. This setting stays until you change it.</li>
+        </ul>
+        <p><kbd>Enter</kbd> confirms your plan. <kbd>Space</kbd> just holds shape.</p>
+        <h4>Reading the pitch</h4>
+        <ul>
+          <li>Green badges are safe, yellow is a gamble, red is a long shot.</li>
+          <li>Ringed defenders are the ones who threaten your chosen action.</li>
+          <li>The dashed line is the offside line.</li>
+          <li>After each move, the caption explains what happened and what the odds were.</li>
+        </ul>
+        <h4>Keys</h4>
+        <p><kbd>H</kbd> help · <kbd>Esc</kbd> menu · <kbd>R</kbd> replay a goal</p>
+      </div>
+    </div>
+    <div class="row end"><button id="btnHelpClose" class="primary">Got it</button></div>
+  </div>
+</div>
+
+<!-- Pause -->
+<div id="pause" class="overlay hidden">
+  <div class="panel">
+    <h2>Paused</h2>
+    <div class="stack">
+      <button id="btnResume" class="primary">Resume</button>
+      <button id="btnPauseHelp">How to play</button>
+      <div class="setting">Animation speed <div class="seg" id="speedPick"></div></div>
+      <div class="setting">Sound <div class="seg" id="soundPick"></div></div>
+      <button id="btnRestart">Restart match</button>
+      <button id="btnQuit">Quit to main menu</button>
+    </div>
+    <p class="muted" id="pauseInfo"></p>
+  </div>
+</div>
+
+<!-- Half time / result -->
+<div id="report" class="overlay hidden">
+  <div class="panel wide">
+    <h2 id="repTitle">Half-time</h2>
+    <div id="repScore" class="repscore"></div>
+    <div id="repGoals" class="repgoals"></div>
+    <table id="repStats" class="stats"></table>
+    <p id="repNote" class="muted"></p>
+    <div class="row end" id="repBtns"></div>
+  </div>
+</div>
+
+<!-- Penalty -->
+<div id="penalty" class="overlay hidden dim">
+  <div class="panel">
+    <h2 id="penTitle">Penalty!</h2>
+    <p id="penText"></p>
+    <div class="row pens">
+      <button data-dir="L">◀ Left</button>
+      <button data-dir="C">▲ Centre</button>
+      <button data-dir="R">Right ▶</button>
+    </div>
+    <p class="muted" id="penOdds"></p>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/commentary.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/render.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
