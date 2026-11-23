@@ -18,8 +18,8 @@
       <label>Momentum</label>
     </div>
     <div class="topbtns">
-      <button id="btnHelp" title="How to play (H)">? Help</button>
-      <button id="btnPause" title="Pause menu (Esc)">❚❚ Menu</button>
+      <button id="btnHelp" title="How to play (H)" aria-label="How to play">?<span class="btxt"> Help</span></button>
+      <button id="btnPause" title="Pause menu (Esc)" aria-label="Pause menu">❚❚<span class="btxt"> Menu</span></button>
     </div>
   </header>
   <main>
@@ -67,9 +67,10 @@
     <h2>How to play</h2>
     <div class="cols">
       <div>
+        <p class="touch-only"><b>On a touchscreen:</b> tap a player or a spot to select it and see the odds. Tap it again, or press <b>Commit</b>, to play it. <b>Cancel</b> clears your choice. The action buttons replace the number keys.</p>
         <h4>The beat</h4>
         <p>Every turn is a short passage of play. First the side <b>without</b> the ball sets its trap. Then the side <b>with</b> the ball sees exactly where everyone is and chooses one action. Then it plays out. You always have unlimited time. Nothing is timed.</p>
-        <h4>With the ball (you attack left → right)</h4>
+        <h4>With the ball (you attack <span class="dir-h">left → right</span><span class="dir-v">up the screen</span>)</h4>
         <ul>
           <li><kbd>1</kbd> <b>Pass</b>: click a teammate. The % badges show the odds.</li>
           <li><kbd>2</kbd> <b>Through ball</b>: click space ahead of a runner. They race the defenders to it.</li>

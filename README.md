@@ -1,6 +1,6 @@
 # Touchline Tactics
 
-A turn-based, 11-a-side football game for the desktop browser. You get unlimited time
+A turn-based, 11-a-side football game for the browser, on desktop, tablet or phone. You get unlimited time
 on every decision, but it still plays like a football match: build-up, pressing, line
 breaks, near misses, offside traps, stoppage-time drama.
 
@@ -28,7 +28,8 @@ node tools/timing.js # estimated real-world match length
 
 ## How to play
 
-You are always the home side, attacking **left → right**. A match is a series of
+You are always the home side, attacking **left → right** (on a phone held upright the pitch
+stands vertically and you attack **up the screen**). A match is a series of
 **beats**. In each beat:
 
 1. Both teams shift into shape automatically.
@@ -82,6 +83,14 @@ tackle with one mark and the trap.
   slow-motion replay (`R`), and half-time and full-time stats.
 
 Other keys: `H` help, `Esc` pause menu (animation speed, sound, restart, quit).
+
+### On phones and tablets
+
+Everything works by touch. Tap a player or a spot to select it and see the odds, then tap it
+again or press **Commit**. **Cancel** clears the choice. The action buttons replace the number
+keys. Held upright, a phone shows a vertical pitch with the controls underneath; held sideways,
+it uses a compact version of the desktop layout. Sound starts when you tap Kick off, and iPhones
+play no sound while the ring/silent switch is on silent.
 
 Penalties are a mind game: pick left, centre or right as the taker or the keeper.
 

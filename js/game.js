@@ -6,6 +6,12 @@
   const { L, W } = FB.P;
   const pct = (p) => `${Math.round(p * 100)}%`;
   const HUMAN = 0, CPU = 1;
+  /** Touchscreen (finger) input: tap wording, bigger tap targets, no keyboard hints. */
+  const isTouch = () => !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  const tx = (desktop, touch) => (isTouch() ? touch : desktop);
+  const TAP_PX = 22;      // finger tap radius around a player
+  const TAP_AIM_PX = 12;  // smaller radius when aiming at space (through balls), so taps near a runner still pick the spot
+  const RETAP_PX = 24;    // a second tap this close to the selected spot commits it
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem('tt_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -74,6 +80,7 @@
     $('chipH').style.background = home.colors[0]; $('chipH').style.borderColor = home.colors[1];
     $('chipA').style.background = away.colors[0]; $('chipA').style.borderColor = away.colors[1];
     $('nameH').textContent = home.name; $('nameA').textContent = away.name;
+    $('nameH').dataset.short = home.short; $('nameA').dataset.short = away.short; // compact header on phones
     UI.phase = 'play';
     updateHud();
     if (!store.get('seenHelp', false)) { store.set('seenHelp', true); showHelp(true).then(() => loop()); }
@@ -210,11 +217,13 @@
       b.dataset.mode = k;
       modes.appendChild(b);
     }
-    $('extra').innerHTML = quick ? '<span>Playing first-time: −5% accuracy, no dribbling. <b>Space</b> = take a touch instead.</span>'
+    $('extra').innerHTML = quick ? `<span>Playing first-time: −5% accuracy, no dribbling. ${tx('<b>Space</b> = take a touch instead.', 'Tap <b>Take a touch</b> to settle instead.')}</span>`
       : (UI.cpuPlanText ? `<span>Opponent: ${UI.cpuPlanText}</span>` : '');
     setMode(UI.mode, true);
-    hint(quick ? 'First-time: pick an action now, or press Space / "Take a touch" to settle (the defence resets).'
-      : 'Hover to preview, click to select, click again or Enter to commit. Number keys switch action.');
+    hint(quick ? tx('First-time: pick an action now, or press Space / "Take a touch" to settle (the defence resets).',
+      'First-time: pick an action now, or tap "Take a touch" to settle (the defence resets).')
+      : tx('Hover to preview, click to select, click again or Enter to commit. Number keys switch action.',
+        'Tap to select and see the odds, then tap again or press Commit. The buttons switch action.'));
     return new Promise((resolve) => { UI.wait = { kind: 'attack', resolve }; });
   }
 
@@ -275,7 +284,8 @@
   function sameAction(a, b) {
     if (!a || !b || a.type !== b.type) return false;
     if (a.to != null || b.to != null) return a.to === b.to;
-    if (a.target && b.target) return Math.hypot(a.target.x - b.target.x, a.target.y - b.target.y) < 2.5;
+    const tol = isTouch() ? Math.max(2.5, RETAP_PX / UI.R.s) : 2.5;
+    if (a.target && b.target) return Math.hypot(a.target.x - b.target.x, a.target.y - b.target.y) < tol;
     return true;
   }
 
@@ -347,23 +357,28 @@
       UI.prevEval = a ? FB.evaluate(m, a) : null;
       if (!a) {
         $('preview').innerHTML = `<div class="lbl">${labelOf({ type: UI.mode })}</div><div class="muted">${modeHelp(UI.mode)}</div>`;
-      } else $('preview').innerHTML = (UI.sel ? '<div class="lbl" style="color:#4fc3f7">Selected — click again or Enter</div>' : '') + describeAction(a, UI.prevEval);
-      setButtons(UI.sel && UI.prevEval && UI.prevEval.valid ? `Commit ${labelOf(UI.sel)} (Enter)` : 'Select an action first', UI.quick ? 'Take a touch (Space)' : null);
+      } else $('preview').innerHTML = (UI.sel ? `<div class="lbl" style="color:#4fc3f7">${tx('Selected — click again or Enter', 'Selected — tap again or press Commit')}</div>` : '') + describeAction(a, UI.prevEval);
+      setButtons(UI.sel && UI.prevEval && UI.prevEval.valid ? `Commit ${labelOf(UI.sel)} (Enter)` : 'Select an action first',
+        UI.quick ? 'Take a touch (Space)' : canCancel() && isTouch() ? 'Cancel' : null);
       $('btnGo').disabled = !(UI.sel && UI.prevEval && UI.prevEval.valid);
     } else if (UI.phase === 'defend') {
       $('preview').innerHTML = describeDefense();
     }
   }
   function modeHelp(k) {
+    const v = tx('Hover over', 'Tap');
     return {
-      pass: 'Hover over a teammate to see the odds. The badges show every option.',
-      through: 'Hover over space ahead of a teammate. They will run onto it. Watch the offside line.',
-      lob: 'Hover over a teammate or a spot. Aim into the box from wide to cross.',
-      dribble: 'Hover inside the ring to carry the ball. Ringed defenders may challenge.',
+      pass: `${v} a teammate to see the odds. The badges show every option.`,
+      through: `${v} ${tx('space', 'the space')} ahead of a teammate. They will run onto it. Watch the offside line.`,
+      lob: `${v} a teammate or a spot. Aim into the box from wide to cross.`,
+      dribble: `${v} inside the ring to carry the ball. Ringed defenders may challenge.`,
       shoot: 'Shoot from here.',
       clear: 'Launch it upfield.',
     }[k];
   }
+  /** A pitch selection that can be cleared (Esc / Cancel). Shoot and clear are always "selected". */
+  const canCancel = () => !!UI.sel && UI.mode !== 'shoot' && UI.mode !== 'clear';
+  function cancelSel() { if (canCancel()) { UI.sel = null; refreshPreview(); } }
 
   // ------------------------------------------------------------------ human defense
   const DMODES = [['press', '1', 'Press'], ['tackle', '2', 'Tackle'], ['mark', '3', 'Mark']];
@@ -391,7 +406,7 @@
     const lineWrap = document.createElement('span'); lineWrap.className = 'seg'; lineWrap.id = 'lineSeg';
     ex.appendChild(document.createTextNode(' Line:'));
     ex.appendChild(lineWrap);
-    seg(lineWrap, [['deep', 'Deep (Q)'], ['normal', 'Normal (W)'], ['high', 'High (E)']], () => UI.plan.line, (v) => { UI.plan.line = v; refreshPreview(); });
+    seg(lineWrap, [['deep', 'Deep (Q)'], ['normal', 'Normal (W)'], ['high', 'High (E)']].map(([v, t]) => [v, stripKeys(t)]), () => UI.plan.line, (v) => { UI.plan.line = v; refreshPreview(); });
     setDMode(UI.dmode, true);
     setButtons('Confirm plan (Enter)', 'Hold shape (Space)');
     $('btnGo').disabled = false;
@@ -410,10 +425,11 @@
     const m = UI.m, P = UI.plan;
     const c = FB.carrier(m);
     const lines = [];
+    const v = tx('Click', 'Tap');
     const modeTxt = {
-      press: 'Click one of your players inside the <b>big ring</b> to close the carrier down.',
-      tackle: 'Click one of your players inside the <b>small ring</b> to lunge for the ball now.',
-      mark: 'Click a dangerous opponent (red rings) to tight-mark them. Click your own player first to choose who marks.',
+      press: `${v} one of your players inside the <b>big ring</b> to close the carrier down.`,
+      tackle: `${v} one of your players inside the <b>small ring</b> to lunge for the ball now.`,
+      mark: `${v} a dangerous opponent (red rings) to tight-mark them. ${v} your own player first to choose who marks.`,
     }[UI.dmode];
     if (P.press != null) lines.push(`<b>Press:</b> ${nm(P.press)} closes ${c.name} down. Every option gets harder for them, but ${nm(P.press)} leaves his zone and is caught upfield if bypassed.`);
     if (P.tackle != null) {
@@ -550,7 +566,7 @@
     $('preview').innerHTML = `<div class="big">${g.scorer}</div><div class="muted">${g.how} · ${g.min}</div>`;
     setButtons('Continue (Enter)', 'Watch replay (R)');
     $('btnGo').disabled = false;
-    hint('Press R to watch a slow-motion replay, or Enter to continue.');
+    hint(tx('Press R to watch a slow-motion replay, or Enter to continue.', 'Tap Watch replay for a slow-motion replay, or Continue.'));
     const choice = await new Promise((resolve) => { UI.wait = { kind: 'goal', resolve }; });
     UI.R.banner = null;
     if (choice === 'replay') await replay();
@@ -622,14 +638,20 @@
 
   // ------------------------------------------------------------------ HUD
   function setPhase(t, cls) { const el = $('phase'); el.textContent = t; el.className = 'phase ' + (cls || ''); }
+  const stripKeys = (t) => (t && isTouch() ? t.replace(/\s*\((Enter|Space|Esc|R|[QWE])\)/g, '') : t);
   function setButtons(go, alt) {
     const g = $('btnGo'), a = $('btnAlt');
+    go = stripKeys(go); alt = stripKeys(alt);
     g.classList.toggle('hidden', !go); a.classList.toggle('hidden', !alt);
     if (go) g.textContent = go;
     if (alt) a.textContent = alt;
   }
   function hint(t) { $('hint').innerHTML = t; UI.hintBase = t; }
-  function flashHint(t) { $('hint').innerHTML = `<span style="color:#ff8a65">${t}</span>`; clearTimeout(UI.hintT); UI.hintT = setTimeout(() => { $('hint').innerHTML = UI.hintBase || ''; }, 2500); }
+  function flashHint(t) {
+    $('hint').innerHTML = `<span style="color:#ff8a65">${t}</span>`; clearTimeout(UI.hintT); UI.hintT = setTimeout(() => { $('hint').innerHTML = UI.hintBase || ''; }, 2500);
+    // compact layouts hide the hint bar: show the message on the pitch instead
+    if (UI.R && getComputedStyle($('hint')).display === 'none') UI.R.caption = { text: t, t0: performance.now(), warn: true };
+  }
   function flushFeed() {
     const m = UI.m; const feed = $('feed');
     while (UI.feedIdx < m.feed.length) {
@@ -678,7 +700,7 @@
       // carrier pulse
       const d = R.disp[c.id];
       ctx.strokeStyle = `rgba(255,255,255,${0.5 + 0.4 * Math.sin(now / 200)})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(X(d.x), Y(d.y), s * 1.9, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(X(d.x), Y(d.y), s * 1.9 * R.k, 0, Math.PI * 2); ctx.stroke();
     }
     if (UI.phase === 'attack') drawAttackOverlay(ctx, R, c);
     if (UI.phase === 'defend') drawDefenseOverlay(ctx, R, c);
@@ -686,24 +708,27 @@
   function ring(ctx, R, id, color, r) {
     const d = R.disp[id]; if (!d) return;
     ctx.strokeStyle = color; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.arc(R.px(d.x), R.py(d.y), R.s * (r || 1.8), 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(R.px(d.x), R.py(d.y), R.s * (r || 1.8) * R.k, 0, Math.PI * 2); ctx.stroke();
   }
   function badge(ctx, R, x, y, text, p) {
-    const s = R.s;
-    ctx.font = `700 ${Math.max(10, Math.round(s * 1.05))}px system-ui, sans-serif`;
-    const w = ctx.measureText(text).width + 8, h = s * 1.5;
-    const X = R.px(x) - w / 2, Y = R.py(y) - s * 3.6;
-    ctx.fillStyle = p == null ? 'rgba(60,60,60,0.85)' : p >= 0.8 ? 'rgba(46,125,50,0.95)' : p >= 0.6 ? 'rgba(249,168,37,0.95)' : p >= 0.4 ? 'rgba(230,81,0,0.95)' : 'rgba(183,28,28,0.95)';
-    ctx.fillRect(X, Y, w, h);
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(text, X + w / 2, Y + h / 2 + 0.5);
+    const s = R.s, S = R.screen(x, y);
+    R.upright(ctx, () => { // text stays upright on a rotated pitch
+      const fs = Math.max(10, Math.round(s * 1.05));
+      ctx.font = `700 ${fs}px system-ui, sans-serif`;
+      const w = ctx.measureText(text).width + 8, h = Math.max(s * 1.5, fs + 4);
+      const X = S.x - w / 2, Y = S.y - Math.max(s * 3.6, R.pr + h + 3);
+      ctx.fillStyle = p == null ? 'rgba(60,60,60,0.85)' : p >= 0.8 ? 'rgba(46,125,50,0.95)' : p >= 0.6 ? 'rgba(249,168,37,0.95)' : p >= 0.4 ? 'rgba(230,81,0,0.95)' : 'rgba(183,28,28,0.95)';
+      ctx.fillRect(X, Y, w, h);
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(text, X + w / 2, Y + h / 2 + 0.5);
+    });
   }
   function colorFor(p) { return p >= 0.8 ? '#66bb6a' : p >= 0.6 ? '#ffca28' : p >= 0.4 ? '#ff7043' : '#ef5350'; }
   function arrow(ctx, R, a, b, color, dash, w) {
     const X1 = R.px(a.x), Y1 = R.py(a.y), X2 = R.px(b.x), Y2 = R.py(b.y);
     ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = w || 3; if (dash) ctx.setLineDash(dash);
     ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2, Y2); ctx.stroke(); ctx.setLineDash([]);
-    const ang = Math.atan2(Y2 - Y1, X2 - X1), h = R.s * 1.4;
+    const ang = Math.atan2(Y2 - Y1, X2 - X1), h = Math.max(R.s * 1.4, 8);
     ctx.beginPath(); ctx.moveTo(X2, Y2); ctx.lineTo(X2 - h * Math.cos(ang - 0.4), Y2 - h * Math.sin(ang - 0.4)); ctx.lineTo(X2 - h * Math.cos(ang + 0.4), Y2 - h * Math.sin(ang + 0.4)); ctx.fill();
     ctx.restore();
   }
@@ -772,6 +797,12 @@
   }
 
   // ------------------------------------------------------------------ input
+  /** Tap/click radius in pitch metres: 2.4 m with a mouse, at least a fingertip wide on touch. */
+  function pickRadius() {
+    if (!isTouch()) return 2.4;
+    const aiming = UI.wait && UI.wait.kind === 'attack' && UI.mode === 'through';
+    return Math.max(2.4, (aiming ? TAP_AIM_PX : TAP_PX) / UI.R.s);
+  }
   function nearestPlayer(pt, maxD) {
     let best = null, bd = maxD || 2.4;
     for (const p of UI.m.players) {
@@ -794,7 +825,7 @@
   function onClick(e) {
     if (!UI.m || !UI.wait) return;
     const pt = UI.R.toPitch(e);
-    const id = nearestPlayer(pt);
+    const id = nearestPlayer(pt, pickRadius());
     if (UI.wait.kind === 'attack') {
       if (UI.mode === 'shoot' || UI.mode === 'clear') { commitAttack({ type: UI.mode }); return; }
       const a = candidateAt(pt, id);
@@ -813,7 +844,7 @@
     if (!$('help').classList.contains('hidden')) { if (k === 'Escape' || k === 'Enter' || k === 'h' || k === 'H') closeHelp(); return; }
     if (UI.phase === 'menu') { if (k === 'Enter') startMatch(); return; }
     if (k === 'Escape') {
-      if (UI.wait && UI.wait.kind === 'attack' && UI.sel && UI.mode !== 'shoot' && UI.mode !== 'clear') { UI.sel = null; refreshPreview(); return; }
+      if (UI.wait && UI.wait.kind === 'attack' && canCancel()) { cancelSel(); return; }
       if (UI.wait && UI.wait.kind === 'defend' && UI.markFrom != null) { UI.markFrom = null; refreshPreview(); return; }
       togglePause(); return;
     }
@@ -898,7 +929,7 @@
     };
     $('btnAlt').onclick = () => {
       const w = UI.wait; if (!w) return;
-      if (w.kind === 'attack') settleQuick();
+      if (w.kind === 'attack') { if (UI.quick) settleQuick(); else cancelSel(); }
       else if (w.kind === 'defend') commitDefense(true);
       else if (w.kind === 'goal') { UI.wait = null; w.resolve('replay'); }
     };

@@ -22,6 +22,10 @@
       this.crowdGain = ctx.createGain(); this.crowdGain.gain.value = this.level;
       src.connect(bp); bp.connect(this.crowdGain); this.crowdGain.connect(this.master);
       src.start();
+      // mobile browsers (iOS especially) suspend audio when the page is hidden or the phone locks
+      const resume = () => { if (this.ctx && this.ctx.state !== 'running' && !document.hidden) this.ctx.resume().catch(() => {}); };
+      document.addEventListener('visibilitychange', resume);
+      window.addEventListener('pointerdown', resume);
     },
     setOn(v) { this.on = v; if (this.master) this.master.gain.value = v ? 0.8 : 0; },
     /** Crowd excitement 0..1 */
