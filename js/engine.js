@@ -16,7 +16,21 @@
     cost: { pass: 34, through: 36, lob: 38, dribble: 31, shot: 34, tackle: 27, restart: 20, goal: 60, penalty: 50 },
     quickPenalty: 0.05, quickMax: 3, quickCost: 0.35,
     pressRange: 14, tackleRange: 5, pressMove: 7.5, markMove: 10,
+    counterMax: 2,         // counter-attacks allowed per beat (stops endless ping-pong)
+    // Line height trade-offs (the defending team's line):
+    //  react: extra seconds an outfield defender needs to turn and chase a ball played in behind
+    //  block: multiplier on shot-block chances (a set deep block has bodies in the way)
+    //  ownThird / midThird: reach multiplier for lane interceptions by defenders standing in their
+    //  own third (0-35 m from goal) or the middle third (35-70 m): deep = crowded box, high = squeezed midfield
+    //  aerial: head start (seconds) defenders get in aerial duels inside their own box (set and facing the ball)
+    line: {
+      deep: { react: -0.4, block: 1.6, ownThird: 1.6, midThird: 1, aerial: 0.25 },
+      normal: { react: 0, block: 1, ownThird: 1, midThird: 1, aerial: 0 },
+      high: { react: 0.35, block: 0.85, ownThird: 1, midThird: 1.15, aerial: -0.1 },
+    },
   };
+  const lineFx = (m, t) => TUNE.line[m.lines[t]] || TUNE.line.normal;
+  FB.lineFx = lineFx;
 
   // ------------------------------------------------------------------ helpers
   const active = (m, t) => m.players.filter((p) => p.team === t && !p.off);
@@ -462,6 +476,7 @@
     m.lastPossTeam = m.poss;
     m.beatStart = { time: m.time, poss: m.poss };
     m.quick = 0; m.quickOk = false;
+    m.counter = false; m.counterOk = false; m.counters = 0;
     m.defAct = null;
     const tl = [];
     let needDefense = true;
@@ -594,6 +609,10 @@
       const T = s / ballSpeed + TUNE.react;
       let R = TUNE.reach0 + T * TUNE.reachRate;
       if (o.role === 'GK') { if (!FB.inOppBox(rel(atkTeam, sd.q))) continue; R *= 1.15; }
+      else {
+        const ox = rel(o.team, o).x, lf = lineFx(m, o.team);
+        R *= ox < 35 ? lf.ownThird : ox < 70 ? lf.midThird : 1;
+      }
       if (opt.maxR) R = Math.min(R, opt.maxR);
       if (sd.d >= R) continue;
       let pi = TUNE.intBase * Math.pow(1 - sd.d / R, 1.5) * (0.8 + o.attrs.tackle * 0.004);
@@ -627,6 +646,7 @@
     xg = clamp(xg, 0.003, 0.9);
     // blockers
     const g = abs(t, { x: L, y: 34 });
+    const lineBlock = lineFx(m, opp(t)).block;
     let keep = 1; const blockers = [];
     if (!o.header) {
       for (const d of active(m, opp(t))) {
@@ -637,14 +657,14 @@
         const width = 0.9 + along * 0.06;
         if (sd.d > width) continue;
         let pb = 0.3 * (1 - sd.d / width) * (along < 3 ? 1 : 3 / along * 0.6 + 0.4);
-        if (o.setPiece) pb *= 0.35;
+        if (o.setPiece) pb *= 0.35; else pb *= lineBlock;
         blockers.push({ id: d.id, p: pb });
         keep *= 1 - pb;
       }
     }
     const pBlock = Math.min(0.5, 1 - keep);
     const pOn = clamp(0.27 + 1.35 * xg + 0.003 * (skill - 65), xg + 0.05, 0.93);
-    return { xg, pBlock, pOn, blockers, base, pressure: pr, goal: (1 - pBlock) * xg };
+    return { xg, pBlock, pOn, blockers, base, pressure: pr, goal: (1 - pBlock) * xg, lineBlock };
   }
   FB.shotModel = shotModel;
 
@@ -719,13 +739,14 @@
       const ballT = dP / 18 + 0.1;
       const runT = dRun / (speed(r) * 1.08);
       let defT = 99, chaser = null;
+      const lineReact = lineFx(m, opp(c.team)).react;
       for (const o of active(m, opp(c.team))) {
         if (m.beaten.has(o.id)) continue;
         let tt;
         if (o.role === 'GK') {
           if (!FB.inOppBox(rel(c.team, T))) continue;
           tt = dist(o, T) / 6.2 + 0.25 - (o.attrs.gk - 70) * 0.004;
-        } else tt = dist(o, T) / speed(o) + 0.8;
+        } else tt = dist(o, T) / speed(o) + 0.8 + lineReact;
         if (tt < defT) { defT = tt; chaser = o; }
       }
       const arrive = Math.max(ballT, runT);
@@ -744,7 +765,7 @@
       outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: 0.2 });
       outcomes.push({ p: exec * lane.p, k: 'lose', pos: lane.list[0] ? lane.list[0].q : T });
       return { valid: true, type: 'through', p: pSucc, exec, lane, pRace, ctrl, offP, runner: r.id, chaser: chaser && chaser.id,
-        runT, defT, ballT, d: dP, outcomes, target: T, threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id).concat(chaser ? [chaser.id] : []) };
+        runT, defT, ballT, d: dP, outcomes, target: T, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0, threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id).concat(chaser ? [chaser.id] : []) };
     }
     if (a.type === 'lob' || a.type === 'cross') {
       let T = a.target, r = null;
@@ -767,9 +788,10 @@
       const hang = dP / 14 + 0.6;
       const tA = Math.max(0, dist(r, T) - 1) / speed(r);
       let tD = 99, duel = null;
+      const aerial = FB.inOppBox(rel(c.team, T)) ? lineFx(m, opp(c.team)).aerial : 0;
       for (const o of active(m, opp(c.team))) {
         if (o.role === 'GK' || m.beaten.has(o.id)) continue;
-        const tt = Math.max(0, dist(o, T) - 1) / speed(o) + 0.12;
+        const tt = Math.max(0, dist(o, T) - 1) / speed(o) + 0.12 - aerial;
         if (tt < tD) { tD = tt; duel = o; }
       }
       let pWin;
@@ -808,7 +830,7 @@
       }
       outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: 0.25 });
       outcomes.push({ p: exec * charge.p, k: 'lose', pos: c });
-      return { valid: true, type: 'lob', p: pSucc, exec, charge, pWin, pClaim, ctrl, header, shot, offP, recv: r.id, duel: duel && duel.id,
+      return { valid: true, type: 'lob', p: pSucc, exec, charge, pWin, pClaim, ctrl, header, shot, offP, recv: r.id, duel: duel && duel.id, aerial,
         d: dP, outcomes, target: T, threats: (duel ? [duel.id] : []).concat(pClaim > 0.1 && gk ? [gk.id] : []) };
     }
     if (a.type === 'dribble') {
@@ -873,11 +895,18 @@
   }
 
   function turnover(m, newP, how) {
-    const oldT = m.poss;
     m.lastPasser = null;
     setCarrier(m, newP);
     if (how === 'intercept') m.stats[newP.team].interceptions++;
-    void oldT;
+    // Winning the ball cleanly in open play (tackle or interception, not the keeper) lets the new
+    // side break at once, before the opponent can regroup: one immediate action, no shape step.
+    if ((how === 'tackle' || how === 'intercept') && newP.role !== 'GK' && (m.counters || 0) < TUNE.counterMax) {
+      m.counterOk = true;
+      m.quickOk = false; m.quick = 0;
+      m.defAct = null; m.marks = {};
+      m.beaten.clear();
+      if (m.downed != null) m.beaten.add(m.downed); // the player who was tackled is still on the floor
+    }
   }
 
   function foul(m, d, c, pos, kind) {
@@ -1065,6 +1094,7 @@
   /** Resolve the attacking action; mutates state; returns {tl, result} */
   FB.resolveAttack = function (m, a) {
     const out = resolveAttackInner(m, a);
+    m.counter = false; // the counter move has been played (a completed pass may still go first-time)
     syncBall(m, out.tl);
     return out;
   };
@@ -1322,8 +1352,19 @@
   }
 
   /** After a completed pass the receiver may play first-time, before the defence resets. */
-  FB.canQuick = (m) => !!m.quickOk && !m.over && m.carrier != null && !m.restart && m.quick < TUNE.quickMax;
-  FB.startQuick = function (m) { m.quick++; m.quickOk = false; m.setPiece = null; m.carryCost = (m.carryCost || 0) + (m.cost || 0); m.cost = 0; };
+  FB.canQuick = (m) => !m.over && m.carrier != null && !m.restart && (!!m.counterOk || (!!m.quickOk && m.quick < TUNE.quickMax));
+  /** True when the next quick action is a counter-attack (ball just won), not a first-time pass. */
+  FB.isCounter = (m) => !!(m.counterOk || m.counter);
+  FB.startQuick = function (m) {
+    m.counter = !!m.counterOk;
+    if (m.counter) {
+      m.counters = (m.counters || 0) + 1;
+      const c = carrierP(m);
+      say(m, 'counter', { a: ctxP(c), t: m.teams[c.team].name, team: c.team }, 'good');
+    }
+    m.counterOk = false;
+    m.quick++; m.quickOk = false; m.setPiece = null; m.carryCost = (m.carryCost || 0) + (m.cost || 0); m.cost = 0;
+  };
 
   const lerp2 = (a, b, k) => ({ x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k) });
 
@@ -1386,7 +1427,7 @@
   FB.endBeat = function (m) {
     const ev = [];
     const cost = ((m.cost || 0) + (m.carryCost || 0) || 30) * m.timeScale * (0.85 + m.rng() * 0.3);
-    m.cost = 0; m.carryCost = 0; m.quickOk = false;
+    m.cost = 0; m.carryCost = 0; m.quickOk = false; m.counterOk = false; m.counter = false;
     if (m.beatStart) m.stats[m.beatStart.poss].poss += cost;
     m.time += cost;
     m.momentum *= 0.9;

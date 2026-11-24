@@ -26,8 +26,15 @@ eats more clock than quick play in the final third.
      be beaten and left on the floor for the rest of the beat. Press and Tackle
      can't be combined.
    - **Mark**: one player tightly marks one opponent, goal-side at about 1.2 m.
-   - **Line height** (Deep / Normal / High): a persistent setting. A high line
-     squeezes space and catches runners offside, but leaves room in behind.
+   - **Line height** (Deep / Normal / High): a persistent setting, and a real
+     trade-off (see section 3):
+     - **Deep** protects the box. Shots are blocked more, headers in the box are won
+       more often, lanes near the box are tighter, and defenders are already set for
+       balls in behind. The cost: the opponent gets more of the ball and more
+       corners, and you win it back far from their goal.
+     - **High** squeezes midfield (tighter lanes there) and wins the ball back
+       higher, so counters start closer to goal. The cost: defenders have to turn
+       and chase balls over the top, and fewer bodies are back to block shots.
    - Or simply **Hold shape**.
 3. **Attacking decision (the side with the ball).** The attacker sees the defence's
    final positions before choosing. Options:
@@ -54,6 +61,17 @@ eats more clock than quick play in the final third.
    *Why:* see devlog cycle 1. Each beat allowing only one action made football too
    slow to produce chances inside the time budget. Tempo is also a real football
    decision: one-touch play exploits a defence that is still shifting.
+6. **Counter-attack.** Winning the ball cleanly in open play (a tackle or an
+   interception by an outfield player, not the keeper) gives the winner one
+   immediate first-time action before the opponent regroups. The same rules apply as
+   for first-time play: −5% accuracy and no dribbling. A completed counter pass can be
+   followed by more first-time play. At most two counters can happen in one beat.
+   *Why:* see devlog cycle 5. Before this, a turnover just ended the beat, and the
+   shape step gave the team that lost the ball time to get back. Now losing the ball
+   upfield costs something, and pressing or a high line pays off when it wins the
+   ball.
+   *Why no dribbling:* with dribbling allowed, a "dribble only" script went from
+   losing to winning, because every ball won came with a free carry.
 
 **Why sequential and not simultaneous?** I prototyped simultaneous orders on paper.
 With them, the odds shown to the attacker would be guesses, and readability
@@ -105,6 +123,17 @@ the odds you see are the real odds.
   keeper is off his line. Blockers in the shot cone add a block chance.
 - **Offside** is certain when a player is more than 1.3 m off, and a probabilistic
   tight call within ±1.3 m. The preview shows "Offside risk X%".
+- **Line height** changes the odds directly (`TUNE.line` in `engine.js`), and the
+  preview names the effect whenever it applies:
+
+  | | Deep | Normal | High |
+  |---|---|---|---|
+  | Head start (s) for outfield defenders chasing a through ball | +0.4 | 0 | −0.35 |
+  | Shot-block chance | ×1.6 | ×1 | ×0.85 |
+  | Lane-interception reach, defenders in their own third | ×1.6 | ×1 | ×1 |
+  | Lane-interception reach, defenders in the middle third | ×1 | ×1 | ×1.15 |
+  | Head start (s) in aerial duels inside their own box | +0.25 | 0 | −0.1 |
+
 - **Pressing has a cost**: a presser who is bypassed is caught upfield and moves at
   half speed in the next shape step. A player who loses a tackle, or is tackled, is
   down for a beat.
@@ -131,6 +160,8 @@ the odds you see are the real odds.
 - **Hunting the ball**: when the opponent keeps the ball for several beats (and the
   CPU isn't winning), the CPU block pushes up and marks man to man, and press plans
   get a growing bonus. Sterile keep-ball can't safely run the clock down.
+- **Counters**: the same rule as quick play decides whether the CPU breaks after
+  winning the ball or settles and lets both teams reorganise.
 - **Quick play**: the CPU plays first-time only when its best first-time option beats
   the value of settling on the ball.
 - **Difficulty**: Easy gives the CPU −7 to all attributes and much noisier choices
@@ -157,7 +188,8 @@ the odds you see are the real odds.
   commentary. `js/render.js`, `js/audio.js` and `js/game.js` are the browser UI.
 - `tools/sim.js` runs headless CPU-vs-CPU batch simulations. `tools/balance.js`
   runs a team round-robin. `tools/exploits.js` pits scripted human strategies against
-  the CPU. `tools/timing.js` estimates real-world match length. `test/*.test.js` uses
+  the CPU. `tools/timing.js` estimates real-world match length. `tools/lines.js` compares
+  deep, normal and high lines over whole matches. `test/*.test.js` uses
   `node:test`.
 - A seeded RNG (mulberry32) makes simulations reproducible.
 

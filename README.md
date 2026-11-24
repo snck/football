@@ -58,6 +58,10 @@ Click once to preview, then click again (or press `Enter`) to commit. `Esc` canc
 before the defence resets. It's 5% less accurate and you can't dribble. Or press
 `Space` to **take a touch** and let everyone reorganise.
 
+**Counter-attack:** when you win the ball with a tackle or an interception, you get
+one first-time move straight away, before the opponent can get back into shape. The
+CPU can counter you the same way, so a pass that gets cut out is costly.
+
 ### Without the ball
 
 | Key | Action |
@@ -66,7 +70,7 @@ before the defence resets. It's 5% less accurate and you can't dribble. Or press
 | `2` **Tackle** | Click one of your players inside the small ring to lunge now. Win / foul (card or penalty) / beaten odds are shown. |
 | `3` **Mark** | Click a dangerous opponent (the red rings are who the CPU most wants to find). Your nearest free player tight-marks him. Click your own player first to choose the marker. |
 | `T` | **Offside trap**: the back line steps up 4 m. |
-| `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. |
+| `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. **Deep** protects the box: more shots blocked, more headers won, fewer balls in behind, but you win the ball back far from their goal. **High** squeezes midfield and wins it back higher (better counters), but your defenders have to turn and chase balls over the top. |
 
 `Enter` confirms the plan; `Space` just holds shape. You can combine one press *or*
 tackle with one mark and the trap.

@@ -20,13 +20,13 @@ for (let i = 0; i < N; i++) {
       if (!ended) {
         const human = m.poss === 0;
         if (human) { tot.think += THINK.attack; tot.att++; } else tot.anim += 0.38;
-        let r = FB.resolveAttack(m, FB.AI.chooseAttack(m)); tot.anim += dur(r.tl);
-        while (FB.canQuick(m)) {
-          const h = m.poss === 0;
-          if (h) { tot.think += THINK.quick; tot.q++; } else tot.anim += 0.22;
-          const q = FB.AI.chooseQuick(m); if (!q) break;
-          FB.startQuick(m); r = FB.resolveAttack(m, q); tot.anim += dur(r.tl);
-        }
+        const r = FB.resolveAttack(m, FB.AI.chooseAttack(m)); tot.anim += dur(r.tl);
+      }
+      while (FB.canQuick(m)) { // first-time plays and counter-attacks
+        const h = m.poss === 0;
+        if (h) { tot.think += THINK.quick; tot.q++; } else tot.anim += 0.22;
+        const q = FB.AI.chooseQuick(m); if (!q) break;
+        FB.startQuick(m); const r = FB.resolveAttack(m, q); tot.anim += dur(r.tl);
       }
     }
     const ev = FB.endBeat(m);

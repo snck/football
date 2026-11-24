@@ -24,6 +24,7 @@
     header: ['{b} rises highest — header!', '{b} attacks it — gets his head on it!'],
     dribble: ['{a} drives forward.', '{a} carries it into space.', '{a} runs at them.', '{a} brings it forward.'],
     dribblePast: ['Lovely feet from {a}, past {c}!', '{a} skips away from {c}!', '{a} leaves {c} for dead!', 'Through the challenge from {c} — {a} is away!'],
+    counter: ['{t} break at speed! {a} leads the counter.', 'Turnover — and {t} go! {a} is away.', '{a} wins it and {t} spring forward!', 'Counter-attack! {a} looks up.'],
     throughSpace: ['{a} plays it into space for {b}.', '{a} slides {b} into the channel.', '{a} finds {b} running into space.'],
     dribbleTk: ['Strong tackle from {c}, dispossesses {a}.', '{c} stands up and wins it cleanly.', '{a} runs into {c} and loses it.'],
     loseTouch: ['{a} knocks it too far.', 'The ball runs away from {a}.'],

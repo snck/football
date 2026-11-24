@@ -183,6 +183,78 @@ test('quick play: allowed after a completed pass, never allows dribbling', () =>
   assert.equal(FB.evaluate(m, { type: 'dribble', target: { x: 55, y: 34 } }).valid, false);
 });
 
+test('counter-attack: an interception lets the winners break at once, under first-time rules', () => {
+  const m = fresh(12);
+  clearPitch(m);
+  give(m, 7, 40, 34);
+  m.players[9].x = 60; m.players[9].y = 34;
+  m.players[15].x = 50; m.players[15].y = 34; // standing in the lane
+  m.rng = () => 0.01; // the pass is accurate and the defender cuts it out
+  const r = FB.resolveAttack(m, { type: 'pass', to: 9 });
+  assert.equal(r.result, 'intercepted');
+  assert.equal(m.poss, 1);
+  assert.ok(FB.canQuick(m) && FB.isCounter(m), 'counter offered');
+  FB.startQuick(m);
+  assert.equal(m.quick, 1);
+  assert.equal(FB.allowedActions(m).dribble, false);
+  assert.ok(m.feed.some((f) => f.kind === 'good' && /counter|break|spring|go!/i.test(f.text)), 'commentary calls the counter');
+  FB.endBeat(m);
+  assert.equal(FB.canQuick(m), false, 'an unused counter does not carry into the next beat');
+});
+
+test('counter-attack: a tackle won counts too, and the tackled player stays down', () => {
+  const m = fresh(13);
+  clearPitch(m);
+  give(m, 7, 50, 34);
+  m.players[15].x = 51; m.players[15].y = 34;
+  m.rng = () => 0.01; // tackle won
+  const r = FB.applyDefense(m, { tackle: 15 });
+  assert.ok(r.ended);
+  assert.equal(m.poss, 1);
+  assert.ok(FB.canQuick(m) && FB.isCounter(m));
+  assert.ok(m.beaten.has(7), 'the tackled player cannot intercept the counter');
+});
+
+test('counter-attack: at most two per beat (no endless ping-pong)', () => {
+  const m = fresh(14);
+  m.rng = () => 0.01;
+  for (let i = 0; i < 3; i++) {
+    clearPitch(m);
+    const atk = m.poss === 0 ? [7, 9, 15] : [18, 20, 4]; // carrier, team-mate, opponent in the lane
+    give(m, atk[0], 40, 34);
+    m.players[atk[1]].x = 60; m.players[atk[1]].y = 34;
+    m.players[atk[2]].x = 50; m.players[atk[2]].y = 34;
+    if (i) FB.startQuick(m);
+    assert.equal(FB.resolveAttack(m, { type: 'pass', to: atk[1] }).result, 'intercepted');
+    assert.equal(FB.canQuick(m), i < 2, `turnover ${i + 1}`);
+  }
+});
+
+test('line height: a deep block blocks more shots, a high line loses more races in behind', () => {
+  const m = fresh(15);
+  clearPitch(m);
+  give(m, 9, 80, 34);
+  m.players[13].x = 84; m.players[13].y = 34.3;
+  m.lines[1] = 'normal';
+  const nBlock = FB.evaluate(m, { type: 'shoot' }).shot.pBlock;
+  m.lines[1] = 'deep';
+  const dBlock = FB.evaluate(m, { type: 'shoot' }).shot.pBlock;
+  assert.ok(dBlock > nBlock * 1.3, `${dBlock} vs ${nBlock}`);
+  // through ball: runner and an outfield defender race for the same space
+  give(m, 7, 55, 34);
+  m.players[9].x = 66; m.players[9].y = 30;
+  m.players[13].x = 76; m.players[13].y = 38;
+  const a = { type: 'through', target: { x: 78, y: 30 }, runner: 9 };
+  m.lines[1] = 'normal';
+  const nRace = FB.evaluate(m, a).pRace;
+  m.lines[1] = 'high';
+  const hi = FB.evaluate(m, a);
+  m.lines[1] = 'deep';
+  const dRace = FB.evaluate(m, a).pRace;
+  assert.ok(hi.pRace > nRace && nRace > dRace, `high ${hi.pRace} normal ${nRace} deep ${dRace}`);
+  assert.ok(hi.lineReact > 0);
+});
+
 test('red card removes a player; a sent-off keeper is replaced in goal', () => {
   const m = fresh(12);
   const gk = m.players.find((p) => p.team === 1 && p.role === 'GK');

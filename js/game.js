@@ -132,6 +132,7 @@
         flushFeed();
       } else UI.cpuPlanText = m.setPiece ? setPieceText(m) : '';
       if (!ended) await attackPhase(token);
+      else if (FB.canQuick(m)) await attackPhase(token, true); // ball won with a tackle: counter-attack chance
     }
     if (token !== loopToken) return;
     const evs = FB.endBeat(m);
@@ -144,20 +145,21 @@
     if (evs.includes('added')) window.Sound.play('cheer');
   }
 
-  async function attackPhase(token) {
+  async function attackPhase(token, counterStart) {
     const m = UI.m;
-    let first = true;
+    let first = !counterStart;
     UI.quick = false;
     while (true) {
       if (token !== loopToken) return;
       let a;
       if (m.poss === HUMAN) {
-        if (!first) FB.startQuick(m); // enter first-time mode before showing options/odds
+        if (!first) { FB.startQuick(m); flushFeed(); } // enter first-time mode before showing options/odds
         a = await humanAttack(!first);
         if (token !== loopToken) return;
         if (!a) return; // took a touch
       } else {
-        setPhase(first ? 'CPU in possession…' : 'CPU plays it quick…', 'wait');
+        const ctr = !first && FB.isCounter(m);
+        setPhase(first ? 'CPU in possession…' : ctr ? 'CPU won the ball. Counter-attack?' : 'CPU plays it quick…', 'wait');
         hint('The opponent is on the ball. Watch how the move plays out. The caption explains the odds.');
         $('modes').innerHTML = ''; $('extra').innerHTML = ''; $('preview').innerHTML = cpuThinkingText();
         setButtons(null, null);
@@ -165,7 +167,7 @@
         a = first ? FB.AI.chooseAttack(m) : FB.AI.chooseQuick(m);
         if (!a) return;
       }
-      if (!first && m.poss !== HUMAN) FB.startQuick(m);
+      if (!first && m.poss !== HUMAN) { FB.startQuick(m); flushFeed(); }
       const res = FB.resolveAttack(m, a);
       excite(m, a, res);
       await play(res.tl);
@@ -207,7 +209,8 @@
     if (UI.mode === 'shoot' && !allowed.shoot) UI.mode = 'pass';
     if (UI.mode === 'dribble' && !allowed.dribble) UI.mode = 'pass';
     const c = FB.carrier(m);
-    setPhase(quick ? `⚡ FIRST-TIME CHANCE — ${c.name}` : `YOUR BALL — ${c.name} (#${c.num})`, 'attack');
+    const counter = quick && FB.isCounter(m);
+    setPhase(counter ? `⚡ COUNTER-ATTACK — ${c.name}` : quick ? `⚡ FIRST-TIME CHANCE — ${c.name}` : `YOUR BALL — ${c.name} (#${c.num})`, 'attack');
     const modes = $('modes'); modes.innerHTML = '';
     for (const [k, key, label] of MODES) {
       const b = document.createElement('button');
@@ -217,10 +220,13 @@
       b.dataset.mode = k;
       modes.appendChild(b);
     }
-    $('extra').innerHTML = quick ? `<span>Playing first-time: −5% accuracy, no dribbling. ${tx('<b>Space</b> = take a touch instead.', 'Tap <b>Take a touch</b> to settle instead.')}</span>`
+    $('extra').innerHTML = counter ? `<span>You won it! Break before they regroup: first-time rules (−5% accuracy, no dribbling). ${tx('<b>Space</b> = take a touch instead.', 'Tap <b>Take a touch</b> to settle instead.')}</span>`
+      : quick ? `<span>Playing first-time: −5% accuracy, no dribbling. ${tx('<b>Space</b> = take a touch instead.', 'Tap <b>Take a touch</b> to settle instead.')}</span>`
       : (UI.cpuPlanText ? `<span>Opponent: ${UI.cpuPlanText}</span>` : '');
     setMode(UI.mode, true);
-    hint(quick ? tx('First-time: pick an action now, or press Space / "Take a touch" to settle (the defence resets).',
+    hint(counter ? tx('Counter-attack: their players are still upfield. Play it now, or press Space / "Take a touch" to settle (they get to regroup).',
+      'Counter-attack: their players are still upfield. Play it now, or tap "Take a touch" to settle (they get to regroup).')
+      : quick ? tx('First-time: pick an action now, or press Space / "Take a touch" to settle (the defence resets).',
       'First-time: pick an action now, or tap "Take a touch" to settle (the defence resets).')
       : tx('Hover to preview, click to select, click again or Enter to commit. Number keys switch action.',
         'Tap to select and see the odds, then tap again or press Commit. The buttons switch action.'));
@@ -341,11 +347,31 @@
       lines.push('Hoofs the ball ~40 m upfield. Possession is up for grabs where it lands.');
       if (ev.charge.p > 0.02) lines.push(`Charge-down risk ${pct(ev.charge.p)}`);
     }
+    const ln = lineNote(a, ev);
+    if (ln) lines.push(ln);
     if (off > 0.01) lines.unshift(`<b class="risk-vhigh">⚑ Offside risk ${pct(off)}</b> — the receiver is ${off > 0.9 ? 'clearly' : 'near'} beyond the line`);
     const pv = a.type === 'shoot' ? ev.shot.goal * 2.2 : a.type === 'clear' ? 0.5 : ev.p;
     const label = a.type === 'shoot' ? (ev.shot.goal > 0.3 ? 'Big chance' : ev.shot.goal > 0.12 ? 'Decent chance' : ev.shot.goal > 0.05 ? 'Half chance' : 'Speculative') : a.type === 'clear' ? 'Safety first' : riskWord(ev.p);
     const failTxt = { pass: 'If it fails: turnover where it is cut out.', through: 'If it fails: they win it and can counter.', lob: ev.header ? 'If it fails: cleared, maybe a corner.' : 'If it fails: they win the header.', dribble: 'If it fails: dispossessed, and you are out of position.', shoot: 'If it misses: goal kick, a corner or a rebound.', clear: '' }[a.type];
     return `<div class="lbl">${head}</div><div><span class="big ${riskClass(pv)}">${big}</span> <span class="${riskClass(pv)}">${label}</span></div><ul>${lines.map((l) => `<li>${l}</li>`).join('')}</ul>${failTxt ? `<div class="muted">${failTxt}</div>` : ''}`;
+  }
+  /** One line on how the defending side's line height changes these odds (null when it doesn't). */
+  function lineNote(a, ev) {
+    const m = UI.m;
+    const c = FB.carrier(m);
+    const line = m.lines[1 - c.team];
+    if (line === 'normal') return null;
+    const deep = line === 'deep';
+    const secs = (x) => String(+Math.abs(x).toFixed(2));
+    if (a.type === 'through' && ev.lineReact) return deep ? `Their deep line is already set: defenders react ${secs(ev.lineReact)}s sooner` : `Their high line has to turn and chase: +${secs(ev.lineReact)}s for defenders`;
+    if (a.type === 'lob' && ev.aerial) return deep ? 'Their deep block is packed in the box: harder to win it in the air' : 'Their high line is running back: easier to win it in the air';
+    if (a.type === 'shoot' && ev.shot.lineBlock !== 1 && !(m.setPiece && m.setPiece.type === 'freekick')) return deep ? 'Their deep block puts bodies in the way: more shots get blocked' : 'Their high line has fewer bodies back: fewer blocks';
+    if (a.type === 'pass') {
+      const tx2 = FB.rel(c.team, m.players[a.to]).x;
+      if (deep && tx2 > 70) return 'Their deep block crowds the final third: lanes near the box are tighter';
+      if (!deep && tx2 > 35 && tx2 < 70) return 'Their high line squeezes midfield: lanes there are tighter';
+    }
+    return null;
   }
   function labelOf(a) { return { pass: 'Pass', through: 'Through ball', lob: 'Lofted ball', dribble: 'Dribble', shoot: 'Shot', clear: 'Clear' }[a.type] || a.type; }
 
@@ -421,6 +447,11 @@
   }
   function toggleTrap() { UI.plan.trap = !UI.plan.trap; const b = $('trapBtn'); if (b) b.classList.toggle('on', !!UI.plan.trap); refreshPreview(); }
 
+  const LINE_TXT = {
+    deep: 'deep. Protects the box: more shots blocked, more headers won, harder to play through. But you win the ball back far from their goal, so your counters start deep.',
+    normal: 'normal. Balanced.',
+    high: 'high. Squeezes midfield and wins the ball back higher, so your counters start closer to goal. But balls over the top are dangerous: your defenders have to turn and chase.',
+  };
   function describeDefense() {
     const m = UI.m, P = UI.plan;
     const c = FB.carrier(m);
@@ -439,7 +470,7 @@
     if (P.mark) lines.push(`<b>Mark:</b> ${nm(P.mark.d)} tight on ${nm(P.mark.a)}. Passes to him get much harder.`);
     if (UI.markFrom != null) lines.push(`<i>${nm(UI.markFrom)} selected. Now click the opponent to mark.</i>`);
     if (P.trap) lines.push('<b>Offside trap:</b> the back line steps up 4 m. Runners on the line are caught, but there is space in behind.');
-    lines.push(`<b>Line:</b> ${P.line}${P.line === 'high' ? ': squeezes space, vulnerable to balls over the top' : P.line === 'deep' ? ': protects the box, concedes territory' : ''}`);
+    lines.push(`<b>Line:</b> ${LINE_TXT[P.line] || P.line}`);
     const top = Object.entries(UI.threat || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id]) => nm(+id));
     return `<div class="lbl">Your plan</div><div class="muted" style="margin-bottom:4px">${modeTxt}</div><ul>${lines.map((l) => `<li>${l}</li>`).join('')}</ul>` +
       (top.length ? `<div class="muted">Biggest threats: ${top.join(', ')}</div>` : '');

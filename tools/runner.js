@@ -24,19 +24,23 @@ function playBeat(m, policy = {}) {
     if (!ended) {
       const t = m.poss;
       const a = (policy.attack && policy.attack[t]) ? policy.attack[t](m) : FB.AI.chooseAttack(m);
-      let res = FB.resolveAttack(m, a);
+      const res = FB.resolveAttack(m, a);
       counts[a.type] = (counts[a.type] || 0) + 1;
       counts['r_' + a.type + '_' + res.result] = (counts['r_' + a.type + '_' + res.result] || 0) + 1;
-      while (FB.canQuick(m)) {
-        const t2 = m.poss;
-        let q;
-        if (policy.quick && policy.quick[t2]) { m.quick++; q = policy.quick[t2](m); m.quick--; } else q = FB.AI.chooseQuick(m);
-        if (!q) break;
-        FB.startQuick(m);
-        res = FB.resolveAttack(m, q);
-        counts.quick = (counts.quick || 0) + 1;
-        counts['r_q' + q.type + '_' + res.result] = (counts['r_q' + q.type + '_' + res.result] || 0) + 1;
-      }
+    }
+    // first-time plays after a completed pass, or a counter-attack after winning the ball
+    while (FB.canQuick(m)) {
+      const t2 = m.poss;
+      const ctr = FB.isCounter(m);
+      let q;
+      if (policy.quick && policy.quick[t2]) { m.quick++; q = policy.quick[t2](m); m.quick--; } else q = FB.AI.chooseQuick(m);
+      if (!q) { if (ctr) counts.counterDeclined = (counts.counterDeclined || 0) + 1; break; }
+      FB.startQuick(m);
+      const res = FB.resolveAttack(m, q);
+      const pre = ctr ? 'r_c' : 'r_q';
+      counts[ctr ? 'counter' : 'quick'] = (counts[ctr ? 'counter' : 'quick'] || 0) + 1;
+      counts[pre + q.type + '_' + res.result] = (counts[pre + q.type + '_' + res.result] || 0) + 1;
+      if (ctr && res.result === 'goal') counts.counterGoal = (counts.counterGoal || 0) + 1;
     }
   }
   return FB.endBeat(m);

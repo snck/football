@@ -109,9 +109,78 @@ sequence is the experience I was aiming for: readable, risky, positional.
   counter identity (high risk appetite, fast forwards).
 - **Result:** team round-robin is now W18–23 for every club out of 60.
 
+## Cycle 5: counter-attacks and a line height that matters
+
+Two weaknesses from the list below: a turnover simply ended the beat, and line height
+barely changed anything. A new tool, `tools/lines.js`, forces one team to a line for
+whole matches, defending actively (CPU press/tackle/mark choices) or passively (hold
+shape), and reports goals, shot locations, through-ball success against, and where
+the ball is won.
+
+**Before** (`node tools/lines.js 120 1`, active defending):
+
+| Line | GF | GA | Shots against in box | Through balls vs | Ball won at |
+|---|---|---|---|---|---|
+| Deep | 0.78 | 1.38 | 7.0 | 60% | 37 m |
+| Normal | 1.00 | 1.09 | 4.9 | 61% | 41 m |
+| High | 1.01 | 1.07 | 4.4 | 62% | 44 m |
+
+Deep was simply worse and High had no cost: through balls beat it no more often than
+they beat a deep line.
+
+**Changes:**
+- **Counter-attack.** A tackle or interception by an outfield player lets the winner
+  play first-time at once (the tackled player stays down). The UI shows
+  "⚡ COUNTER-ATTACK" with a Take-a-touch option, and the CPU decides with the same
+  rule it uses for first-time play.
+- **Line effects in the odds** (`TUNE.line`). Through-ball reaction time, shot
+  blocks, lane interceptions by third, and aerial duels in the box all depend on the
+  defending team's line. The preview panel names the effect whenever it changes the
+  shown odds.
+- **Deep needed more than I expected.** The first version cut neither goals nor xG
+  against a deep line, because the expected-value attacker just switched channels.
+  When headers got harder it crossed less and shot or passed more. A goal breakdown
+  showed deep lines inviting 40% more crosses (4.5 vs 3.3 per match). Only a combined
+  boost worked: blocks ×1.6, box-area lanes ×1.6, a 0.4 s head start on through
+  balls, and +0.25 s in aerial duels.
+- **Counters with dribbling were exploitable.** At first a counter allowed a
+  dribble. Over 60 matches the "dribble only" script went from W17 D15 L28 (counters
+  off) to W25 D21 L14. Counters now follow first-time rules (no dribbling).
+- **Team ratings re-balanced.** Counters favoured the pressing club (Redmoor) and the
+  counter club (Coldforge): over 240 matches per club, points per match spread from
+  1.16 to 1.64. New ratings: Harbour 76→78, Redmoor 74 (unchanged), Kestrel 76→77,
+  Coldforge 78→77.
+
+**After** (`node tools/lines.js 400 3`, active defending):
+
+| Line | W-D-L | GF | GA | xGA | Through balls vs | Corners against | Ball won at |
+|---|---|---|---|---|---|---|---|
+| Deep | 140-98-162 | 1.01 | 1.06 | 1.03 | 54% | 2.6 | 38 m |
+| Normal | 148-88-164 | 1.15 | 1.21 | 1.19 | 61% | 2.3 | 40 m |
+| High | 163-93-144 | 1.47 | 1.40 | 1.35 | 67% | 2.5 | 42 m |
+
+Deep now means fewer goals both ways and High means more goals both ways. All three
+have similar records. The opposing CPU changes its line with the score late on, so it
+does a little better than any fixed line, which is how it should be. Passive
+"hold shape" is still poor on every line (GA 1.9–2.2). Active defending is still the
+main lever.
+
+**Other effects** (300-match sim, 60-match exploit runs):
+- Goals per team rose from 1.10 to 1.21 and shots from 7.2 to 8.3. There are about 15
+  counters per match (both sides) and about 4 are declined.
+- Match length is about 18.6 min (Normal) and 13.7 min (Short), up from 18 and 13.5.
+- Normal is a little harder. The greedy "thoughtful" script went from W40 D12 L8 to
+  W37 D7 L16, because CPU counters punish its intercepted passes.
+- Every scripted shortcut still loses more than it wins: dribble only W17 L22, always
+  tackle W15 L32, shoot on sight W19 L27, park the bus W7 L44.
+- Team balance (60 matches per pairing, seed 20000): 1.26 to 1.44 points per match,
+  with Kestrel at the bottom. The committed version was 1.25 to 1.52 on the same
+  seeds. The CPU-vs-CPU sim at 300 matches still favours Redmoor, so club balance
+  carries about ±0.1 points per match of uncertainty.
+
 ---
 
-## Final numbers (evidence)
+## Final numbers (evidence, before cycle 5)
 
 `node tools/sim.js 300 11`, CPU vs CPU, Normal length (final build):
 
@@ -196,7 +265,7 @@ whistle with 0 page errors, plus forced penalties for and against.
   (≈7) and fouls (≈3) and corners (≈2) per side are below real-world levels. Pass
   accuracy (≈67%) is low because ambitious through balls count as passes. I tuned for
   scorelines and shot quality, the things a player actually notices.
-- **Defensive line height matters less than press, tackle and mark decisions.** Deep,
+- *(Fixed in cycle 5; kept for the record.)* **Defensive line height matters less than press, tackle and mark decisions.** Deep,
   normal and high lines concede similar amounts when you defend passively. The real
   lever is your active choices, which is the right emphasis but means "park the bus"
   is a weak plan rather than a viable one.

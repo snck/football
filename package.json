@@ -8,6 +8,7 @@
     "sim": "node tools/sim.js 200",
     "balance": "node tools/balance.js 10",
     "exploits": "node tools/exploits.js 24 normal",
+    "lines": "node tools/lines.js 200",
     "dev": "node tools/serve.js"
   },
   "license": "MIT"
