@@ -17,6 +17,11 @@
     cost: { pass: 34, through: 36, lob: 38, dribble: 31, shot: 34, tackle: 27, restart: 20, goal: 60, penalty: 50 },
     quickPenalty: 0.05, quickMax: 3, quickCost: 0.35,
     pressRange: 14, tackleRange: 5, pressMove: 7.5, markMove: 10,
+    // A mark stays on for `markBeats` more beats: the marker follows his man instead of holding his zone (`markGap` m
+    // goal-side; within `markTight` m it counts as tight and adds `markPress` to the pressure on a pass to him).
+    markBeats: 2, markGap: 1.2, markTight: 2.2, markPress: 0.15,
+    // Offside trap: defenders who stepped up need this much longer (s) to turn and chase a ball played in behind.
+    trapReact: 0.4,
     // Cover: stand off the carrier (`coverGap` m goal-side), step across (`coverSlide` m) to whoever receives the next
     // completed ball, and jockey dribblers (longer reach, fewer fouls).
     coverGap: 3.5, coverSlide: 4, jockeyReach: 0.7, jockeyFoul: 0.5,
@@ -71,7 +76,7 @@
       players: [], time: 0, half: 1, added: [null, null], score: [0, 0], poss: 0, carrier: null,
       ball: { x: L / 2, y: W / 2 }, restart: null, setPiece: null, lines: [o.home.style.line, o.away.style.line],
       stats: [mkStats(), mkStats()], feed: [], goals: [], beat: 0, over: false, momentum: 0,
-      beaten: new Set(), marks: {}, cover: null, lastPasser: null, lastTouch: 0, halfEvents: { goals: 0, cards: 0, stops: 0 },
+      beaten: new Set(), marks: {}, markOrders: [null, null], trapped: null, cover: null, lastPasser: null, lastTouch: 0, halfEvents: { goals: 0, cards: 0, stops: 0 },
       phase: 'idle', history: [],
     };
     const diffAdj = { easy: -7, normal: 0, hard: 4 }[m.diff] || 0;
@@ -242,11 +247,13 @@
         .sort((a, b2) => a.r.x - b2.r.x);
       const free = new Set(ps.filter((p) => p.role !== 'GK').map((p) => p.id));
       const c = carrierP(m);
+      const mo = m.markOrders[t]; // the marker has left his zone to follow his man (shapeStep moves him)
+      if (mo) { free.delete(mo.d); delete out[mo.d]; }
       let container = null;
-      if (c) {
+      if (c && !(mo && mo.a === c.id)) {
         let nd = 1e9;
         for (const p of ps) {
-          if (p.role === 'GK') continue;
+          if (p.role === 'GK' || mo && p.id === mo.d) continue;
           const d = dist(p, c);
           if (d < nd) { nd = d; container = p; }
         }
@@ -256,6 +263,7 @@
         if (container && nd < 16 && engage) free.delete(container.id); else container = null;
       }
       for (const a of atk) {
+        if (mo && a.o.id === mo.a) continue;
         const danger = clamp(1 - a.r.x / 55, 0, 1);
         let best = null, bd = 18 + hunt * 14;
         for (const id of free) {
@@ -290,6 +298,12 @@
     if (d <= maxD) { p.x = tgt.x; p.y = tgt.y; } else { p.x += ((tgt.x - p.x) / d) * maxD; p.y += ((tgt.y - p.y) / d) * maxD; }
   }
 
+  /** Where a tight marker of team t stands: just goal-side of p. */
+  function markSpot(p, t) {
+    const u = unit(p, ownGoal(t));
+    return clampPitch({ x: p.x + u.x * TUNE.markGap, y: p.y + u.y * TUNE.markGap });
+  }
+
   function shapeStep(m) {
     const moves = {};
     const def = opp(m.poss);
@@ -301,6 +315,13 @@
         moveTowards(p, tg[id], maxD);
         moves[id] = { x: p.x, y: p.y };
       }
+    }
+    const mo = m.markOrders[def];
+    if (mo) { // a marker goes where his man went
+      const d = P(m, mo.d), a = P(m, mo.a);
+      moveTowards(d, markSpot(a, def), speed(d) * TUNE.defShapeSecs * (d.recover > 0 ? 0.5 : 1));
+      m.marks[a.id] = d.id; // evaluate() checks whether he's close enough to count as tight
+      moves[d.id] = { x: d.x, y: d.y };
     }
     for (const p of m.players) if (p.recover > 0) p.recover--;
     return moves;
@@ -482,6 +503,7 @@
     m.beaten.clear();
     if (m.downed != null) { m.beaten.add(m.downed); m.downed = null; }
     m.marks = {};
+    m.trapped = null;
     m.cover = null;
     m.wall = null;
     m.setPiece = null;
@@ -496,11 +518,13 @@
     if (m.restart) {
       const type = m.restart.type;
       const team = m.restart.team;
+      m.markOrders = [null, null];
       if (type === 'kickoff') say(m, m.half === 2 && m.time === HALF && m.score[0] + m.score[1] === m.goalsAtHalf ? 'kickoff2' : (m.goals.length && m.lastGoalTeam !== team ? 'restartGoal' : 'kickoff'), { t: m.teams[team].name, team });
       const moves = setupRestart(m);
       tl.push({ dur: type === 'kickoff' ? 0.4 : 0.9, moves, owner: m.carrier, ball: { x: m.ball.x, y: m.ball.y, arc: 0 }, setup: true });
       needDefense = type === 'throwin' || type === 'goalkick';
     } else {
+      m.markOrders = m.markOrders.map((o) => (o && o.left > 0 ? { d: o.d, a: o.a, left: o.left - 1 } : null));
       const moves = shapeStep(m);
       tl.push({ dur: 0.6, moves, owner: m.carrier });
     }
@@ -543,6 +567,18 @@
     return clampPitch({ x: p.x + u.x * TUNE.coverGap, y: p.y + u.y * TUNE.coverGap });
   }
 
+  /** Team t's standing mark ({ d, a, left: beats it goes on after this one }), or null. */
+  FB.liveMark = (m, t) => m.markOrders[t];
+  /**
+   * Who the defending side has marking a man once this plan is given, or null. One mark at a time: a new order replaces the
+   * old one, and giving the marker another job (or act.unmark) ends it.
+   */
+  FB.markerAfter = function (m, act) {
+    const o = m.markOrders[opp(m.poss)];
+    const d = act.mark && act.mark.d != null && act.mark.a != null ? act.mark.d : o && !act.unmark ? o.d : null;
+    return d != null && d !== act.press && d !== act.tackle && d !== act.cover ? d : null;
+  };
+
   /** Apply defensive moves (no randomness except tackle). Returns {tl, ended} */
   FB.applyDefense = function (m, act, hypothetical) {
     act = act || {};
@@ -551,20 +587,21 @@
     const moves = {};
     const tl = [];
     if (act.line && !hypothetical) m.lines[t] = act.line;
+    const marker = FB.markerAfter(m, act), old = m.markOrders[t];
+    if (old && (marker !== old.d || act.mark && act.mark.a !== old.a)) delete m.marks[old.a];
     if (act.trap) {
+      m.trapped = new Set();
       for (const p of active(m, t)) {
-        if (p.role !== 'DF') continue;
+        if (p.role !== 'DF' || p.id === marker) continue; // a marker stays with his man
         const r = rel(t, p);
         const cr = rel(t, c);
         const nx = Math.min(r.x + 4, cr.x - 1.5);
-        if (nx > r.x) { const a = abs(t, { x: nx, y: r.y }); p.x = a.x; p.y = a.y; moves[p.id] = { x: p.x, y: p.y }; }
+        if (nx > r.x) { const a = abs(t, { x: nx, y: r.y }); p.x = a.x; p.y = a.y; moves[p.id] = { x: p.x, y: p.y }; m.trapped.add(p.id); }
       }
     }
     if (act.mark && act.mark.d != null && act.mark.a != null) {
       const d = P(m, act.mark.d), a = P(m, act.mark.a);
-      const u = unit(a, ownGoal(t));
-      const tgt = clampPitch({ x: a.x + u.x * 1.2, y: a.y + u.y * 1.2 });
-      moveTowards(d, tgt, TUNE.markMove);
+      moveTowards(d, markSpot(a, t), TUNE.markMove);
       m.marks[a.id] = d.id;
       moves[d.id] = { x: d.x, y: d.y };
     }
@@ -582,6 +619,8 @@
       moves[d.id] = { x: d.x, y: d.y };
     }
     if (hypothetical) return null;
+    if (marker == null) m.markOrders[t] = null;
+    else if (act.mark) m.markOrders[t] = { d: act.mark.d, a: act.mark.a, left: TUNE.markBeats };
     m.defAct = act;
     if (Object.keys(moves).length) tl.push({ dur: 0.5, moves, owner: m.carrier });
     let ended = false;
@@ -620,13 +659,19 @@
   };
 
   // ------------------------------------------------------------------ lane / shot models
+  /** A marker watches his man: he doesn't cut out a ball meant for anyone else (`to`). Returns his id, or -1. */
+  function busyMarker(m, to) {
+    for (const a in m.marks) if (+a !== to && +a !== m.carrier) return m.marks[a];
+    return -1;
+  }
   function laneRisk(m, from, to, atkTeam, ballSpeed, opt) {
     opt = opt || {};
     const D = dist(from, to);
     const list = [];
     const endT = opt.endT != null ? opt.endT : 0.97;
+    const marker = opt.to != null ? busyMarker(m, opt.to) : -1;
     for (const o of active(m, opp(atkTeam))) {
-      if (m.beaten.has(o.id)) continue;
+      if (m.beaten.has(o.id) || o.id === marker) continue;
       if (opt.exclude && opt.exclude.has(o.id)) continue;
       const sd = segDist(from, to, o);
       if (sd.t >= endT) continue;
@@ -794,9 +839,10 @@
       if (d > max) return { valid: false, reason: `Too far for a ground pass (${Math.round(d)} m). Try a lofted pass.` };
       const offP = offsideProb(m, r);
       const exec = clamp(1.0 - 0.003 * d - 0.07 * pc + (c.attrs.pass - 70) * 0.003 + mom, 0.45, 0.99);
-      const lane = laneRisk(m, c, r, c.team, 17);
+      const lane = laneRisk(m, c, r, c.team, 17, { to: r.id });
       let pr = pressureOn(m, r);
-      if (m.marks[r.id] != null && dist(P(m, m.marks[r.id]), r) < 2.2) pr = Math.min(1.2, pr + 0.15);
+      const markedBy = m.marks[r.id] != null && dist(P(m, m.marks[r.id]), r) < TUNE.markTight ? m.marks[r.id] : null;
+      if (markedBy != null) pr = Math.min(1.2, pr + TUNE.markPress);
       const ctrl = clamp(0.975 - 0.2 * pr - Math.max(0, d - 28) * 0.004 + (r.attrs.dribble - 70) * 0.002, 0.5, 0.99);
       const pClean = exec * (1 - lane.p);
       const pSucc = pClean * ctrl * (1 - offP);
@@ -806,7 +852,7 @@
         { p: pClean * offP, k: 'offside', pos: { x: r.x, y: r.y } },
         { p: (1 - exec), k: 'loose', pos: { x: r.x, y: r.y }, keep: missKeep(m, c, r, SC.passMiss) },
         { p: exec * lane.p, k: 'lose', pos: lane.list[0] ? lane.list[0].q : r }];
-      return { valid: true, type: 'pass', p: pSucc, exec, lane, ctrl, recvPressure: pr, offP, d, outcomes, target: { x: r.x, y: r.y }, recv: r.id,
+      return { valid: true, type: 'pass', p: pSucc, exec, lane, ctrl, recvPressure: pr, markedBy, offP, d, outcomes, target: { x: r.x, y: r.y }, recv: r.id,
         threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id) };
     }
     if (a.type === 'through') {
@@ -839,12 +885,12 @@
         if (o.role === 'GK') {
           if (!FB.inOppBox(rel(c.team, T))) continue;
           tt = dist(o, T) / 6.2 + 0.25 - (o.attrs.gk - 70) * 0.004;
-        } else tt = dist(o, T) / speed(o) + 0.8 + lineReact;
+        } else tt = dist(o, T) / speed(o) + 0.8 + lineReact + (m.trapped && m.trapped.has(o.id) ? TUNE.trapReact : 0);
         if (tt < defT) { defT = tt; chaser = o; }
       }
       const arrive = Math.max(ballT, runT);
       const pRace = sigmoid((defT - arrive) / 0.32);
-      const lane = laneRisk(m, c, T, c.team, 16, { endT: 0.8, exclude: chaser ? new Set([chaser.id]) : null });
+      const lane = laneRisk(m, c, T, c.team, 16, { to: r.id, endT: 0.8, exclude: chaser ? new Set([chaser.id]) : null });
       const exec = clamp(0.985 - 0.003 * dP - 0.08 * pc + (c.attrs.pass - 70) * 0.004 + mom, 0.45, 0.975);
       const ctrl = clamp(0.92 + (r.attrs.dribble - 70) * 0.002 - (runT > ballT + 1 ? 0.08 : 0), 0.6, 0.97);
       const pClean = exec * (1 - lane.p);
@@ -858,7 +904,8 @@
       outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.throughMiss) });
       outcomes.push({ p: exec * lane.p, k: 'lose', pos: lane.list[0] ? lane.list[0].q : T });
       return { valid: true, type: 'through', p: pSucc, exec, lane, pRace, ctrl, offP, runner: r.id, chaser: chaser && chaser.id,
-        runT, defT, ballT, d: dP, outcomes, target: T, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0, threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id).concat(chaser ? [chaser.id] : []) };
+        runT, defT, ballT, d: dP, outcomes, target: T, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0,
+        trapReact: chaser && m.trapped && m.trapped.has(chaser.id) ? TUNE.trapReact : 0, threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id).concat(chaser ? [chaser.id] : []) };
     }
     if (a.type === 'lob' || a.type === 'cross') {
       let T = a.target, r = null;
@@ -991,6 +1038,8 @@
   function turnover(m, newP, how) {
     m.lastPasser = null;
     m.cover = null;
+    m.trapped = null;
+    m.markOrders = [null, null];
     setCarrier(m, newP);
     if (how === 'intercept') m.stats[newP.team].interceptions++;
     // Winning the ball cleanly in open play (tackle or interception, not the keeper) lets the new
@@ -1190,6 +1239,7 @@
   FB.resolveAttack = function (m, a) {
     const out = resolveAttackInner(m, a);
     catchPresser(m);
+    catchTrapped(m, a, out.result);
     coverSlide(m, out.tl);
     m.counter = false; // the counter move has been played (a completed pass may still go first-time)
     syncBall(m, out.tl);
@@ -1202,6 +1252,16 @@
     if (!d || !c || d.off || c.team === d.team) return;
     const g = ownGoal(d.team);
     if (dist(c, g) < dist(d, g)) d.recover = Math.max(d.recover, 1);
+  }
+  /** Defenders who stepped up for the trap and see a through ball or lob completed beyond them are caught upfield too. */
+  function catchTrapped(m, a, result) {
+    const c = carrierP(m);
+    if (!m.trapped || !c || result !== 'ok' || a.type === 'pass' || a.type === 'dribble') return;
+    const g = ownGoal(opp(c.team));
+    for (const id of m.trapped) {
+      const d = P(m, id);
+      if (!d.off && dist(c, g) < dist(d, g)) d.recover = Math.max(d.recover, 1);
+    }
   }
   /**
    * Once per beat, after a completed ball that could be played on first-time, the covering player steps across towards
@@ -1594,8 +1654,8 @@
 
   // snapshot helpers for AI look-ahead
   FB.snapshot = (m) => ({ pos: m.players.map((p) => [p.x, p.y]), beaten: new Set(m.beaten), marks: Object.assign({}, m.marks),
-    cover: m.cover && Object.assign({}, m.cover) });
-  FB.restore = (m, s) => { m.players.forEach((p, i) => { p.x = s.pos[i][0]; p.y = s.pos[i][1]; }); m.beaten = s.beaten; m.marks = s.marks; m.cover = s.cover; };
+    cover: m.cover && Object.assign({}, m.cover), trapped: m.trapped });
+  FB.restore = (m, s) => { m.players.forEach((p, i) => { p.x = s.pos[i][0]; p.y = s.pos[i][1]; }); m.beaten = s.beaten; m.marks = s.marks; m.cover = s.cover; m.trapped = s.trapped; };
   FB.carrier = carrierP;
   FB.HALF = HALF;
 })(typeof window !== 'undefined' ? window : globalThis);

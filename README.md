@@ -72,12 +72,13 @@ CPU can counter you the same way, so a pass that gets cut out is costly.
 |---|---|
 | `1` **Press** | Click one of your players inside the big ring. He closes the carrier down, making every option harder, but he's out of position if bypassed. |
 | `2` **Tackle** | Click one of your players inside the small ring to lunge now. Win / foul (card or penalty) / beaten odds are shown. |
-| `3` **Mark** | Click a dangerous opponent (the red rings are who the CPU most wants to find). Your nearest free player tight-marks him. Click your own player first to choose the marker. |
+| `3` **Mark** | Click a dangerous opponent (the red rings are who the CPU most wants to find). Your nearest free player tight-marks him and follows him for 2 more turns, until you win the ball or play stops (purple rings). The marker leaves his zone and doesn't cut out balls meant for anyone else. One mark at a time: a new one replaces it, and giving the marker another job ends it. Click your own player first to choose the marker. |
 | `4` **Cover** | Click one of your players inside the big ring. He stands off the carrier, then steps up to 4 m towards whoever receives the next completed ball, before it can be played first-time. Harder to dribble past and half the fouls, but little pressure on the pass. |
-| `T` | **Offside trap**: the back line steps up 4 m. |
+| `X` | **Release** the standing mark: the marker goes back to his zone next turn. |
+| `T` | **Offside trap**: the back line steps up 4 m (a marker stays with his man). Whoever steps up needs 0.4 s longer to chase a ball played in behind, and is slow next turn if a through ball or lob beats him. |
 | `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. **Deep** protects the box: more shots blocked, more headers won, fewer balls in behind, but you allow more shots from inside the box and win the ball back a little further from their goal. **High** squeezes midfield and wins it back higher (better counters), but your defenders have to turn and chase balls over the top. Overall, High and Normal are level and Deep is slightly weaker, so pick for the situation. |
 
-`Enter` confirms the plan; `Space` just holds shape. You can combine one press,
+`Enter` confirms the plan; `Space` just holds shape (a standing mark stays on). You can combine one press,
 tackle *or* cover with one mark and the trap.
 
 ### Reading the screen

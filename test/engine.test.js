@@ -372,6 +372,171 @@ test('cover: a hypothetical plan leaves no trace after restore', () => {
   assert.deepEqual(m.cover, { id: 15, used: false });
 });
 
+/** 7 (team 0) has it at 50,34. 9 stands at 60,46 and 15 is ready to mark him; 16 is spare. Everyone else is out of the way. */
+function markStage(act = { mark: { d: 15, a: 9 } }) {
+  const m = fresh(3); clearPitch(m); m.restart = null; give(m, 7, 50, 34);
+  Object.assign(m.players[6], { x: 46, y: 50 });
+  Object.assign(m.players[9], { x: 60, y: 46 });
+  Object.assign(m.players[15], { x: 63, y: 44 });
+  Object.assign(m.players[16], { x: 70, y: 30 });
+  if (act) FB.applyDefense(m, act);
+  return m;
+}
+
+test('lasting mark: the marker follows his man for two more beats, then goes back to his zone', () => {
+  const m = markStage(), d = m.players[15], a = m.players[9];
+  assert.deepEqual(FB.liveMark(m, 1), { d: 15, a: 9, left: FB.TUNE.markBeats });
+  for (let left = FB.TUNE.markBeats - 1; left >= 0; left--) {
+    const from = { x: d.x, y: d.y };
+    FB.startBeat(m);
+    assert.deepEqual(FB.liveMark(m, 1), { d: 15, a: 9, left });
+    assert.equal(m.marks[9], 15);
+    const u = FB.dist(a, { x: 105, y: 34 });
+    const spot = { x: a.x + ((105 - a.x) / u) * FB.TUNE.markGap, y: a.y + ((34 - a.y) / u) * FB.TUNE.markGap };
+    const reach = FB.speed(d) * FB.TUNE.defShapeSecs;
+    assert.ok(FB.dist(d, spot) < 1e-9 || Math.abs(FB.dist(d, from) - reach) < 1e-9, 'goal-side of where his man went, or as near as one step gets him');
+    assert.ok(FB.dist(d, spot) <= FB.dist(from, spot));
+  }
+  FB.startBeat(m);
+  assert.equal(FB.liveMark(m, 1), null);
+  assert.deepEqual(m.marks, {});
+});
+
+test('lasting mark: only a marker close to his man counts as tight', () => {
+  const m = markStage(), d = m.players[15];
+  const near = FB.evaluate(m, { type: 'pass', to: 9 });
+  assert.equal(near.markedBy, 15);
+  m.marks = {};
+  assert.ok(FB.evaluate(m, { type: 'pass', to: 9 }).ctrl > near.ctrl);
+  m.marks = { 9: 15 };
+  d.x += 3;
+  assert.equal(FB.evaluate(m, { type: 'pass', to: 9 }).markedBy, null);
+});
+
+test('lasting mark: a marker does not cut out balls meant for someone else', () => {
+  const m = markStage(null);
+  Object.assign(m.players[15], { x: 57, y: 41 }); // between 7 and 9, and in the lane to 8 behind him
+  Object.assign(m.players[8], { x: 64, y: 49 });
+  const inLane = (to) => FB.evaluate(m, { type: 'pass', to }).lane.list.some((x) => x.id === 15);
+  assert.ok(inLane(8) && inLane(9));
+  m.marks = { 9: 15 };
+  assert.ok(!inLane(8) && inLane(9));
+  const through = { type: 'through', target: { x: 66, y: 52 }, runner: 8 };
+  const ev = FB.evaluate(m, through);
+  assert.ok(Math.abs(sumP(ev) - 1) < 1e-9);
+  m.marks = {};
+  assert.ok(FB.evaluate(m, through).lane.p >= ev.lane.p);
+  m.marks = { 7: 15 }; // his man is the one on the ball
+  assert.ok(inLane(8));
+});
+
+test('lasting mark: ends on a turnover, a restart or a red card', () => {
+  let m = markStage();
+  let n = 0; m.rng = () => (n++ ? 0 : 0.5); // accurate, then cut out
+  Object.assign(m.players[16], { x: 55, y: 40.4 });
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 9 }).result, 'intercepted');
+  assert.equal(FB.liveMark(m, 1), null);
+  m = markStage();
+  m.restart = { type: 'throwin', team: 0, pos: { x: 50, y: 0.3 } };
+  FB.startBeat(m);
+  assert.equal(FB.liveMark(m, 1), null);
+  m = markStage(null);
+  Object.assign(m.players[16], { x: 51, y: 34, yellow: 1 });
+  FB.applyDefense(m, { mark: { d: 15, a: 9 } });
+  const o = FB.tackleOdds(m, 16), seq = [o.pWin + o.pFoul / 2, 0];
+  m.rng = () => (seq.length ? seq.shift() : 0.5);
+  FB.applyDefense(m, { tackle: 16 });
+  assert.ok(m.players[16].off && m.restart);
+  m.rng = FB.rng(1);
+  FB.startBeat(m);
+  assert.equal(FB.liveMark(m, 1), null);
+});
+
+test('lasting mark: one at a time; released on request or when the marker gets another job; it survives other orders', () => {
+  const after = (act) => { const m = markStage(); FB.applyDefense(m, act); return m; };
+  assert.deepEqual(FB.liveMark(after({ press: 16 }), 1), { d: 15, a: 9, left: 2 });
+  assert.deepEqual(FB.liveMark(after({}), 1), { d: 15, a: 9, left: 2 }, 'holding shape keeps it');
+  for (const act of [{ unmark: true }, { press: 15 }, { cover: 15 }]) {
+    const m = after(act);
+    assert.equal(FB.liveMark(m, 1), null, JSON.stringify(act));
+    assert.deepEqual(m.marks, {}, 'and he stops marking at once');
+  }
+  const m = after({ mark: { d: 16, a: 6 } });
+  assert.deepEqual(FB.liveMark(m, 1), { d: 16, a: 6, left: 2 });
+  assert.deepEqual(m.marks, { 6: 16 }, 'the old man is not marked as well');
+  assert.equal(FB.markerAfter(markStage(), { press: 15 }), null);
+  assert.equal(FB.markerAfter(markStage(), { press: 16 }), 15);
+});
+
+test('marks and the trap: a hypothetical plan leaves no trace after restore', () => {
+  const m = markStage();
+  const state = () => JSON.stringify([m.players.map((p) => [p.x, p.y]), m.marks, m.markOrders, m.trapped && [...m.trapped], m.cover]);
+  const before = state();
+  for (const act of [{ unmark: true }, { press: 15, trap: true }, { mark: { d: 16, a: 6 }, trap: true }, { trap: true }]) {
+    const s = FB.snapshot(m);
+    FB.applyDefense(m, act, true);
+    FB.restore(m, s);
+    assert.equal(state(), before, JSON.stringify(act));
+  }
+});
+
+/** 7 (team 0) at 55,34 looks for 9 at 66,30; defender 13 will step up from 72,33 with the trap. */
+function trapStage(act) {
+  const m = fresh(3); clearPitch(m); m.restart = null; give(m, 7, 55, 34);
+  Object.assign(m.players[9], { x: 66, y: 30 });
+  const d = m.players.find((p) => p.team === 1 && p.role === 'DF');
+  Object.assign(d, { x: 72, y: 33 });
+  for (const p of m.players) p.recover = 0;
+  FB.applyDefense(m, act);
+  return { m, d };
+}
+const behind = { type: 'through', target: { x: 80, y: 30 }, runner: 9 };
+
+test('trap: a defender who stepped up turns later, only for that beat, and the preview says so', () => {
+  const { m, d } = trapStage({ trap: true });
+  assert.ok(m.trapped.has(d.id) && d.x < 72);
+  const ev = FB.evaluate(m, behind);
+  assert.equal(ev.chaser, d.id);
+  assert.equal(ev.trapReact, FB.TUNE.trapReact);
+  assert.ok(Math.abs(sumP(ev) - 1) < 1e-9);
+  m.trapped = null; // same positions, no step
+  const plain = FB.evaluate(m, behind);
+  assert.equal(plain.trapReact, 0);
+  assert.ok(Math.abs(ev.defT - plain.defT - FB.TUNE.trapReact) < 1e-9 && ev.pRace > plain.pRace);
+  assert.equal(trapStage({}).m.trapped, null);
+  // a defender with no room to step (level with the ball) is not slowed, and the marker stays with his man
+  const t = trapStage({});
+  t.d.x = 56;
+  FB.applyDefense(t.m, { trap: true });
+  assert.ok(!t.m.trapped.has(t.d.id));
+  const k = trapStage({ mark: { d: t.d.id, a: 9 }, trap: true });
+  assert.ok(!k.m.trapped.has(k.d.id));
+  FB.startBeat(m);
+  assert.equal(m.trapped, null);
+});
+
+test('trap: a through ball or lob completed beyond the line leaves it caught upfield; a pass to feet does not', () => {
+  const run = (a, act, pos) => {
+    const { m, d } = trapStage(act);
+    if (pos) Object.assign(m.players[9], pos);
+    const ev = FB.evaluate(m, a);
+    let n = 0; m.rng = () => { n++; return ev.lane || ev.charge ? pick(ev, n) : 0; };
+    return [FB.resolveAttack(m, a).result, d.recover];
+  };
+  // rolls: accuracy low = fine; lane / charge / offside / claim high = none; race, duel and touch low = won
+  const pick = (ev, n) => {
+    const lanes = ev.lane ? ev.lane.list.length : 1;
+    const off = ev.offP > 0 ? 1 : 0;
+    if (ev.type === 'lob') return n === 1 ? 0.999 : n === 2 ? 0 : n <= 2 + off ? 0.9999 : n === 3 + off ? 0.999 : 0;
+    return n === 1 ? 0 : n <= 1 + lanes + off ? 0.9999 : 0;
+  };
+  assert.deepEqual(run(behind, { trap: true }), ['ok', 1]);
+  assert.deepEqual(run(behind, {}), ['ok', 0]);
+  assert.deepEqual(run({ type: 'pass', to: 9 }, { trap: true }), ['ok', 0]);
+  assert.deepEqual(run({ type: 'through', target: { x: 62, y: 20 }, runner: 9 }, { trap: true }, { x: 60, y: 24 }), ['ok', 0], 'in front of him');
+  assert.deepEqual(run({ type: 'lob', target: { x: 80, y: 32 } }, { trap: true }, { x: 69, y: 31 }), ['ok', 1]);
+});
+
 test('dribble: a better dribbler takes fewer heavy touches', () => {
   const m = fresh(4); clearPitch(m); give(m, 7, 50, 34);
   const at = (d) => { m.players[7].attrs.dribble = d; return FB.evaluate(m, { type: 'dribble', target: { x: 58, y: 34 } }).lose; };

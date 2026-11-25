@@ -13,8 +13,8 @@ when the cycle is done.
 | 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | **done** |
 | 2 | Re-tune Redmoor and the High line | **done** (user approved react 0.5, Redmoor 73) |
 | 3 | A. Cover / jockey | **done** (user dropped the chain-share target, see "Phase 3 result") |
-| 4 | B. Lasting marks, costlier trap | todo, **next** (user: don't start until told) |
-| 5 | C. Teammate runs | todo |
+| 4 | B. Lasting marks, costlier trap | **built**; trap target met, mark target missed, user to decide (see "Phase 4 result") |
+| 5 | C. Teammate runs | todo, **next** |
 | 6 | D. Through balls (variety only; may be dropped after 3–5) | todo |
 | 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo |
 | 8 | Final docs, full balance pass, ask about publishing | todo |
@@ -55,7 +55,9 @@ Standing rules:
 | 960000000+, 965000000+ (1000 each), 962000000+ (200) and 963000000+ (100) for the loose-ball fit, sim 41 | phase 1b |
 | 970000000–973000000 blocks (970.0–970.4, 971.0, 971.1, 971.5, 972.0, 973.0 ×10⁶) | phase 3 tuning |
 | 975, 976, 977, 978 ×10⁶ | phase 3 hold-out |
-| **980…, 990… (×10⁶) unused** | reserved: phases 4, 5 (first half tuning, +5,000,000 hold-out) |
+| 980, 981, 982, 983, 984 ×10⁶ | phase 4 tuning |
+| 985 (policies), 986 (diag), 987 (mirror), 988 (balance) ×10⁶; sim 44 | phase 4 hold-out, both engines |
+| **990… (×10⁶) unused** | reserved: phase 5 (first half tuning, +5,000,000 hold-out) |
 
 ### Tools added for this cycle
 
@@ -336,6 +338,61 @@ mark or trap costs almost nothing, so there's no reason not to add both.
 Accept: pressing with a mark or trap is no longer automatically better than pressing alone; "press + mark + trap" at least 0.10 below the CPU;
 "high line + trap" still loses; offsides/team 0.4–1.0.
 
+### Phase 4 result (2026-11-25)
+
+What was built differs from the spec in these ways:
+- **The marker moves after his man** in the shape step, not with the other defenders. In the spec's order attackers run away from him: the mark
+  was tight on 14% of follow-up beats, against 47% this way (60 matches).
+- **Addition to the spec: a marker doesn't cut out balls meant for anyone else** (left out of `laneRisk`, unless his man has the ball). The
+  hole in the zone was not enough: without this rule press + mark was +0.10 over press (8,000 matches) and +0.14 (4,000), more than before the phase.
+- **`trapReact` is 0.4**, not 0.25 (at 0.25 the habit kept about +0.05 over press). A marker doesn't step up with the trap.
+- A new mark removes the old one at once (otherwise two men counted as marked in the turn of the change).
+- CPU: the flat trap charge is gone, the mark charge stays 0.001, and with a mark standing it also weighs releasing it. 8,000 mirror matches against the
+  default (984000000, ±0.057): mark 0 +0.001, 0.003 −0.054, 0.006 −0.121, never mark −0.174, trap charge 0.002 +0.019, no release −0.042.
+- `m.markOrders` is only written for real plans, so it isn't in the snapshot; `m.trapped` is.
+
+Hold-out, 4,000 matches per row (985000000, ±0.04; "before" is the phase 3 engine on the same seeds):
+
+| | Before | After |
+|---|---|---|
+| CPU brain | 1.36 | 1.40 |
+| hold | 0.68 | 0.65 |
+| press nearest | 1.22 | 1.14 |
+| mark top threat | 0.73 | 0.79 |
+| press + mark (new mark every turn) | 1.26 | 1.24 |
+| press + mark, left on | | 1.17 |
+| mark, then press | | 0.94 |
+| press + trap | 1.31 | 1.15 |
+| press + mark + trap | 1.29 | 1.20 |
+| press + mark, high line | 1.22 | 1.18 |
+| cover / + mark / + mark + trap | 1.01 / 1.10 / 1.12 | 1.00 / 1.06 / 1.04 |
+| greedy | not run | 1.86 |
+| through / pass / lob / dribble first | not run | 1.52 / 1.74 / 1.19 / 1.62 |
+| always take a touch | not run | 0.91 |
+
+| Target | Result | |
+|---|---|---|
+| Trap no longer automatically better | press + trap − press: +0.01 ±0.06 (before +0.09) | **met** |
+| Mark no longer automatically better | press + mark − press: **+0.10 ±0.06** here; about **+0.06 ±0.03** pooled with tuning (before: also +0.06 ±0.03) | **missed** |
+| Same, marking once and leaving it on | press + mark, left on − press: +0.03 ±0.06 | ok |
+| press + mark + trap 0.10 below the CPU | 0.20 below; every fixed defence habit is at least 0.16 below | met |
+| "high line + trap" still loses | 57-53-190 (before 70-46-184) | met |
+| Offsides/team 0.4–1.0 | 0.56 (before 0.58) | met |
+
+Whole game, same seeds before → after: goals/team 1.24 → 1.25 (`balance.js 1000 988000000`, 12,000 matches), 1.22 → 1.23 (`sim 1000 44`). Chain share of goals
+51.8 → 51.3% (`diag.js 1000 986000000`), calibration within 0.7 points everywhere, loose balls within 2.4. Plans: trap 11 → 16%, anything with a mark 42 →
+36%, release 2.6%. Clubs within ±0.01 of the mean (±0.033). `mirror.js 16000 987000000`: High − Normal +0.036 → **+0.056 ±0.041** (the phase 2 target was
+±0.05, so it sits at the edge; the two can't be told apart), Deep − Normal −0.107 → −0.072 ±0.039. `exploits 300 normal`: thoughtful 175-62-63, shoot on sight 74-82-144,
+dribble only 90-88-122, hoof 39-96-165, safest pass 0-149-151, park the bus 39-51-210, always tackle/press 84-64-152: all one-note scripts lose.
+`timing 40` 18.4 min. `sim 300 11` 1.27 goals/team. Speed 8.5 → 8.0 matches/s on one core. Engine tests 33 → 41.
+
+**Where the mark's edge comes from** (tuning seeds, 8,000 matches each, press + mark − press): no move this turn (`markMove` 0) −0.01, no follow-up turns +0.07, no
+first-touch bonus +0.04. So it's the extra repositioning. These didn't remove it: moves of 4–6 m (+0.03 to +0.07), slower chasing of other runners (0.4 s +0.03, 0.8 s +0.06), reach for
+other balls halved. Each is ±0.045 to ±0.06, so they can't be ranked; the pick from tuning (+0.05) came out at +0.10 on the hold-out. `markMove` 0 also takes the CPU's mark away.
+
+**Open for the user.** Either accept it (re-marking the top threat each turn uses the threat rings, and it's 0.16 below the CPU), or change the rule so a *new* mark can't
+be combined with a press, tackle or cover (a standing one can). The second wasn't built or measured; "mark, then press" at 0.94 says a turn spent only on marking is expensive.
+
 ## Phase 5: C. Teammate runs
 
 **Why:** off-ball movement is automatic and partly random. Always taking a touch is weak, so the
@@ -439,3 +496,8 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   DEVLOG entry waits for phase 8; DESIGN, README, how-to text and CLAUDE.md are current.
 - 2026-11-25: the user took the recommendation: Cover stays, the chain-share target is dropped, no change to first-time shots. They asked not to
   start phase 4 yet. Documentation only, no game code changed.
+- 2026-11-25: phase 4, see "Phase 4 result" above. The user asked for the next phase. `policies.js` has two new habits ("press + mark, left on", "mark, then press").
+  UI: standing mark drawn in purple, Release button / key X, trap and mark notes in the previews, "still marks" in the CPU's plan. Checked with a script driving headless Chrome
+  (desktop, 375×667, 667×375): ordering a mark, seeing it stand, releasing it (key and button), hold shape delivering the release, trap, the CPU's mark text; no console errors.
+  The row with the extra button first pushed Confirm off a portrait phone, so touch uses short labels while a mark stands (panel height 246 px again, as in phase 3).
+  DEVLOG entry waits for phase 8; DESIGN, README, how-to text and CLAUDE.md are current.

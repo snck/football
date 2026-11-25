@@ -16,11 +16,13 @@ function markTop(m, busy) {
   }
   return null;
 }
-function plan(m, { press, cover, mark, extra }) {
+/** keep: leave a standing mark alone instead of giving a new one every turn; swap: press only while a mark is standing. */
+function plan(m, { press, cover, mark, keep, swap, extra }) {
+  if (swap && FB.liveMark(m, 1 - m.poss)) mark = 0; else if (swap) press = 0;
   const o = Object.assign({}, extra);
   const n = press || cover ? nearest(m) : null;
   if (n) o[cover ? 'cover' : 'press'] = n.id;
-  const k = mark ? markTop(m, n) : null;
+  const k = mark && !(keep && FB.liveMark(m, 1 - m.poss)) ? markTop(m, n) : null;
   if (k) o.mark = k;
   return o;
 }
@@ -37,6 +39,8 @@ const P = {
   'press nearest': { defense: (m) => plan(m, { press: 1 }) },
   'mark top threat': { defense: (m) => plan(m, { mark: 1 }) },
   'press + mark': { defense: (m) => plan(m, { press: 1, mark: 1 }) },
+  'press + mark, left on': { defense: (m) => plan(m, { press: 1, mark: 1, keep: 1 }) },
+  'mark, then press': { defense: (m) => plan(m, { press: 1, mark: 1, swap: 1 }) },
   'press + trap': { defense: (m) => plan(m, { press: 1, extra: { trap: true } }) },
   'press + mark + trap': { defense: (m) => plan(m, { press: 1, mark: 1, extra: { trap: true } }) },
   'press + mark, high line': { defense: (m) => plan(m, { press: 1, mark: 1, extra: { line: 'high' } }) },

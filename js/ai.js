@@ -134,8 +134,12 @@
     return TEMP.normal;
   }
 
-  /** What the CPU charges itself for a cover order (tuned on match results: looking ahead to the first-time move made it play worse). */
-  const PLAN = { cover: 0.002 };
+  /**
+   * What the CPU charges itself for an order on top of what it can see one action ahead (tuned on match results). Cover's slide
+   * is out of its sight (looking ahead to the first-time move made it play worse), and so are a mark's later beats. The trap's
+   * cost is in evaluate(), so it needs none.
+   */
+  const PLAN = { cover: 0.002, mark: 0.001 };
 
   const pickSide = (m, mix) => { const r = m.rng(); return r < mix.L ? 'L' : r < mix.L + mix.R ? 'R' : 'C'; };
 
@@ -202,6 +206,10 @@
         }
       }
       if (m.lines[t] !== 'deep') plans.push({ trap: true });
+      if (FB.liveMark(m, t)) { // is the standing mark worth keeping?
+        plans.push({ unmark: true });
+        if (near[0]) plans.push({ press: near[0].id, unmark: true });
+      }
       let best = null;
       const results = [];
       for (const plan of plans) {
@@ -226,8 +234,7 @@
         // the longer they keep it, the more we need to go and win it back (more so when not winning)
         const urgency = Math.max(0, (m.possStreak || 0) - 2) * (m.score[t] > m.score[c.team] ? 0.0015 : 0.003);
         if (plan.press != null || plan.tackle != null) A -= urgency;
-        if (plan.mark) A += 0.001;
-        if (plan.trap) A += 0.002;
+        if (plan.mark) A += PLAN.mark;
         A += (m.rng() - 0.5) * 0.003;
         results.push({ plan, A });
         if (!best || A < best.A) best = { plan, A };

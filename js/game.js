@@ -311,12 +311,13 @@
       big = pct(ev.p);
       lines.push(`Accuracy ${pct(ev.exec)}${FB.pressureOn(m, FB.carrier(m)) > 0.5 ? ' (you are being pressed)' : ''}`);
       lines.push(ev.lane.p > 0.03 ? `Lane: ${ev.lane.list.filter((x) => x.p > 0.03).map((x) => `${nm(x.id)} ${pct(x.p)}`).join(', ')} could cut it out` : 'Lane is clear');
-      lines.push(`Receiver is ${prLabel(ev.recvPressure)} → first touch ${pct(ev.ctrl)}`);
+      lines.push(`Receiver is ${prLabel(ev.recvPressure)}${ev.markedBy != null ? `, tightly marked by ${nm(ev.markedBy)}` : ''} → first touch ${pct(ev.ctrl)}`);
     } else if (a.type === 'through') {
       head = `Through ball for ${nm(ev.runner)}`;
       big = pct(ev.p);
       lines.push(`Race: ${nm(ev.runner)} ${ev.runT.toFixed(1)}s vs ${ev.chaser != null ? nm(ev.chaser) : 'nobody'} ${ev.defT < 50 ? ev.defT.toFixed(1) + 's' : ''} → wins ${pct(ev.pRace)}`);
       lines.push(`Accuracy ${pct(ev.exec)} · lane ${ev.lane.p > 0.03 ? pct(ev.lane.p) + ' intercept risk' : 'clear'}`);
+      if (ev.trapReact) lines.push(`${nm(ev.chaser)} stepped up for the trap: +${ev.trapReact}s to turn`);
       const tr = FB.rel(HUMAN, ev.target);
       if (tr.x > 85) lines.push('Gets in behind — big chance if it comes off');
     } else if (a.type === 'lob') {
@@ -432,15 +433,18 @@
     }
     const ex = $('extra');
     ex.innerHTML = '';
-    const tb = document.createElement('button'); tb.id = 'trapBtn'; tb.innerHTML = '<kbd>T</kbd>Offside trap'; tb.onclick = () => toggleTrap(); ex.appendChild(tb);
+    const live = FB.liveMark(m, HUMAN);
+    const short = live && isTouch(); // with a third control the row only fits a phone with short labels
+    const tb = document.createElement('button'); tb.id = 'trapBtn'; tb.innerHTML = `<kbd>T</kbd>${short ? 'Trap' : 'Offside trap'}`; tb.onclick = () => toggleTrap(); ex.appendChild(tb);
     const lineWrap = document.createElement('span'); lineWrap.className = 'seg'; lineWrap.id = 'lineSeg';
-    ex.appendChild(document.createTextNode(' Line:'));
+    if (live) { const rb = document.createElement('button'); rb.id = 'releaseBtn'; rb.innerHTML = `<kbd>X</kbd>${short ? 'Release' : 'Release mark'}`; rb.onclick = toggleRelease; ex.appendChild(rb); }
+    if (!short) ex.appendChild(document.createTextNode(' Line:'));
     ex.appendChild(lineWrap);
     seg(lineWrap, [['deep', 'Deep (Q)'], ['normal', 'Normal (W)'], ['high', 'High (E)']].map(([v, t]) => [v, stripKeys(t)]), () => UI.plan.line, (v) => { UI.plan.line = v; refreshPreview(); });
     setDMode(UI.dmode, true);
     setButtons('Confirm plan (Enter)', 'Hold shape (Space)');
     $('btnGo').disabled = false;
-    hint('Choose how to defend: press, tackle or cover the carrier, tight-mark a threat (red rings), or just hold shape. You can combine one press, tackle or cover with one mark.');
+    hint('Choose how to defend: press, tackle or cover the carrier, tight-mark a threat (red rings), or just hold shape. You can combine one press, tackle or cover with one mark. A mark stays on for ' + turns(FB.TUNE.markBeats) + '.');
     return new Promise((resolve) => { UI.wait = { kind: 'defend', resolve }; });
   }
   function setDMode(k, silent) {
@@ -450,6 +454,24 @@
     if (!silent) window.Sound.play('click');
   }
   function toggleTrap() { UI.plan.trap = !UI.plan.trap; const b = $('trapBtn'); if (b) b.classList.toggle('on', !!UI.plan.trap); refreshPreview(); }
+
+  /** Take the marker off his man (the standing mark from an earlier turn). */
+  function toggleRelease() {
+    if (!FB.liveMark(UI.m, HUMAN)) return;
+    UI.plan.unmark = !UI.plan.unmark;
+    const b = $('releaseBtn'); if (b) b.classList.toggle('on', UI.plan.unmark);
+    refreshPreview();
+  }
+  const turns = (n) => (n === 1 ? '1 more turn' : `${n} more turns`);
+  /** What happens to a standing mark under the plan so far: null if there is none. */
+  function liveMarkText() {
+    const m = UI.m, P = UI.plan, o = FB.liveMark(m, HUMAN);
+    if (!o) return null;
+    if (P.mark) return P.mark.d === o.d && P.mark.a === o.a ? null : `${nm(o.d)} leaves ${nm(o.a)} (one mark at a time).`;
+    if (P.unmark) return `${nm(o.d)} is released from ${nm(o.a)} and goes back to his zone next turn.`;
+    if (FB.markerAfter(m, P) == null) return `${nm(o.d)} has another job, so he stops marking ${nm(o.a)}.`;
+    return `${nm(o.d)} is marking ${nm(o.a)}: ${o.left ? `this turn and ${turns(o.left)}` : 'last turn'}. ${tx('<b>X</b> releases him', 'Tap <b>Release</b> to take him off')}.`;
+  }
 
   const LINE_TXT = {
     deep: 'deep. Protects the box: more shots blocked, more headers won, harder to play through. But you win the ball back far from their goal, so your counters start deep.',
@@ -473,9 +495,11 @@
       const o = FB.tackleOdds(m, P.tackle);
       lines.push(`<b>Tackle:</b> ${nm(P.tackle)} lunges. <span class="risk-low">Win ${pct(o.pWin)}</span> · <span class="risk-high">foul ${pct(o.pFoul)}${FB.inOppBox(FB.rel(c.team, c)) ? ' = PENALTY' : ' (card risk)'}</span> · <span class="risk-vhigh">beaten ${pct(o.pBeat)}</span>`);
     }
-    if (P.mark) lines.push(`<b>Mark:</b> ${nm(P.mark.d)} tight on ${nm(P.mark.a)}. Passes to him get much harder.`);
+    if (P.mark) lines.push(`<b>Mark:</b> ${nm(P.mark.d)} tight on ${nm(P.mark.a)}, and follows him for ${turns(FB.TUNE.markBeats)}, until you win the ball or play stops. Passes to him get much harder, but ${nm(P.mark.d)} leaves his zone and won't cut out balls to anyone else.`);
+    const lm = liveMarkText();
+    if (lm) lines.push(`<b>Standing mark:</b> ${lm}`);
     if (UI.markFrom != null) lines.push(`<i>${nm(UI.markFrom)} selected. Now click the opponent to mark.</i>`);
-    if (P.trap) lines.push('<b>Offside trap:</b> the back line steps up 4 m. Runners on the line are caught, but there is space in behind.');
+    if (P.trap) lines.push('<b>Offside trap:</b> the back line steps up 4 m. Runners on the line are caught, but whoever steps up needs ' + FB.TUNE.trapReact + 's longer to chase a ball in behind, and is slow next turn if a through ball or lob beats him.');
     lines.push(`<b>Line:</b> ${LINE_TXT[P.line] || P.line}`);
     const top = Object.entries(UI.threat || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id]) => nm(+id));
     return `<div class="lbl">Your plan</div><div class="muted" style="margin-bottom:4px">${modeTxt}</div><ul>${lines.map((l) => `<li>${l}</li>`).join('')}</ul>` +
@@ -518,8 +542,8 @@
   function commitDefense(hold) {
     if (!UI.wait || UI.wait.kind !== 'defend') return;
     const P = UI.plan;
-    const act = hold ? { line: P.line } : { press: P.press, tackle: P.tackle, cover: P.cover, mark: P.mark, trap: P.trap, line: P.line };
-    for (const k of Object.keys(act)) if (act[k] === undefined) delete act[k];
+    const act = hold ? { unmark: P.unmark, line: P.line } : { unmark: P.unmark, press: P.press, tackle: P.tackle, cover: P.cover, mark: P.mark, trap: P.trap, line: P.line };
+    for (const k of Object.keys(act)) if (act[k] === undefined || k === 'unmark' && !act[k]) delete act[k];
     const w = UI.wait; UI.wait = null;
     UI.phase = 'resolve';
     setPhase('Defending…', 'wait');
@@ -546,7 +570,9 @@
     if (d.press != null) parts.push(`${nm(d.press)} presses you`);
     if (d.tackle != null) parts.push(`${nm(d.tackle)} lunges in!`);
     if (d.cover != null) parts.push(`${nm(d.cover)} stands off and covers`);
+    const lm = FB.liveMark(m, 1 - m.poss); // asked before the plan is applied
     if (d.mark) parts.push(`${nm(d.mark.d)} marks ${nm(d.mark.a)}`);
+    else if (lm && FB.markerAfter(m, d) != null) parts.push(`${nm(lm.d)} still marks ${nm(lm.a)}`);
     if (d.trap) parts.push('back line steps up (offside trap)');
     if (d.line && d.line !== 'normal') parts.push(`${d.line} line`);
     void mine;
@@ -835,6 +861,11 @@
     if (P.press != null) arrow(ctx, R, R.disp[P.press], cd, '#81d4fa');
     if (P.cover != null) { arrow(ctx, R, R.disp[P.cover], cd, '#80cbc4', [2, 5]); drawSlide(ctx, R, P.cover); }
     if (P.tackle != null) arrow(ctx, R, R.disp[P.tackle], cd, '#ff8a65');
+    const lm = FB.liveMark(m, HUMAN);
+    if (lm && !P.mark && FB.markerAfter(m, P) != null) {
+      if (FB.dist(R.disp[lm.d], R.disp[lm.a]) * R.s > R.pr * 4) arrow(ctx, R, R.disp[lm.d], R.disp[lm.a], '#ce93d8', [2, 4], 2);
+      ring(ctx, R, lm.a, '#ce93d8', 2.0); ring(ctx, R, lm.d, '#ce93d8', 1.6);
+    }
     if (P.mark) { arrow(ctx, R, R.disp[P.mark.d], R.disp[P.mark.a], '#ce93d8', [6, 4]); ring(ctx, R, P.mark.a, '#ce93d8', 2.2); }
     if (UI.markFrom != null) ring(ctx, R, UI.markFrom, '#ce93d8', 2.0);
     if (P.trap) for (const p of FB.active(m, HUMAN)) if (p.role === 'DF') { const d = R.disp[p.id]; arrow(ctx, R, d, { x: d.x + 4, y: d.y }, 'rgba(255,235,59,0.8)', null, 2); }
@@ -908,6 +939,7 @@
       const md = DMODES.find((x) => x[1] === k);
       if (md) { setDMode(md[0]); return; }
       if (k === 't' || k === 'T') { toggleTrap(); return; }
+      if (k === 'x' || k === 'X') { toggleRelease(); return; }
       const lines = { q: 'deep', w: 'normal', e: 'high' };
       if (lines[k.toLowerCase()]) { UI.plan.line = lines[k.toLowerCase()]; const sg = $('lineSeg'); if (sg) [...sg.children].forEach((b, i) => b.classList.toggle('on', ['deep', 'normal', 'high'][i] === UI.plan.line)); refreshPreview(); return; }
       if (k === 'Enter') { commitDefense(false); e.preventDefault(); return; }

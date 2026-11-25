@@ -30,7 +30,12 @@ eats more clock than quick play in the final third.
      to 4 m towards the receiver, once, before the first-time decision is made. He also
      jockeys dribblers: longer reach, half the fouls. Press, Tackle and Cover can't be
      combined with each other.
-   - **Mark**: one player tightly marks one opponent, goal-side at about 1.2 m.
+   - **Mark**: one player tightly marks one opponent, goal-side at about 1.2 m, and follows
+     him for two more beats. One mark at a time. It ends early on a turnover or a restart, when
+     the side gives a new mark, gives the marker another job, or releases him. The marker leaves
+     his zone, and he watches his man: he doesn't cut out balls meant for anyone else.
+   - **Offside trap**: the back line steps up 4 m (a marker stays with his man). Anyone who
+     stepped up is slower to turn (section 3).
    - **Line height** (Deep / Normal / High): a persistent setting, and a real
      trade-off (see section 3):
      - **Deep** protects the box. Shots are blocked more, headers in the box are won
@@ -144,9 +149,9 @@ the odds you see are the real odds.
   | Lane-interception reach, defenders in the middle third | ×1 | ×1 | ×1.15 |
   | Head start (s) in aerial duels inside their own box | +0.25 | 0 | −0.1 |
 
-  Overall, High is level with Normal and Deep is slightly weaker. In mirror matches (same club on
-  both sides, CPU play) High takes 0.035 ±0.029 points per match more than Normal and Deep 0.10 ±0.03 fewer,
-  over 32,000 matches each.
+  Overall, High is about level with Normal and Deep is slightly weaker. In mirror matches (same club on
+  both sides, CPU play) High takes 0.056 ±0.041 points per match more than Normal and Deep 0.072 ±0.039 fewer,
+  over 16,000 matches each.
 
 - **Loose balls** (misplaced passes, bad touches, heavy touches, clearances) go to whoever
   gets there first: distance over speed, plus some luck. `evaluate` estimates who that will
@@ -167,6 +172,12 @@ the odds you see are the real odds.
   previewed against a cover names the slide that will follow; the first-time odds are worked
   out after it. The slide itself matters little: the receiver is usually 15 m or more away
   (in 100 matches, a median of 22 m before the slide and 18 m after).
+- **Marks**: a marker within 2.2 m of his man adds 0.15 to the pressure on a pass to him, on top of what
+  his position does. He's left out of the interception list for balls to anyone else (unless his man
+  has the ball). On a later beat he moves after his man does, so he's within 2.2 m about
+  47% of the time (60 matches); moving with the other defenders, before the attackers, it was 14%.
+- **Trap**: a defender who stepped up needs 0.4 s longer to chase a through ball that beat. If a through ball or
+  lob is completed beyond him, he's caught upfield like a bypassed presser.
 - A player who loses a tackle, or is tackled, is down for a beat.
 - Small random noise and skill differences leave room for luck and surprise.
 
@@ -181,15 +192,16 @@ the odds you see are the real odds.
   possession teams value safety. So does game state: a team trailing late takes more
   risk, and a team leading late protects the ball. It picks with a softmax, which
   gives variety. The temperature depends on difficulty.
-- **Defence**: it builds up to about 14 defensive plans (hold; press with the nearest
+- **Defence**: it builds up to about 16 defensive plans (hold; press with the nearest
   1 or 2; tackle with anyone in range; mark the 2 most dangerous receivers; press and
   mark combined; cover with the nearest 1 or 2, and cover and mark; the offside trap unless
   the line is deep). It
   applies each one hypothetically and asks the attack evaluator how good the
   attacker's best options would be. It picks the plan that minimises the attacker's
   soft-max expected value, counting tackle outcomes too. That way it presses when
-  pressing helps and marks the man you were about to find. It can't see the cover slide, so
-  a cover order just costs it a fixed 0.002. Line height
+  pressing helps and marks the man you were about to find. It can't see the cover slide or
+  a mark's later beats, so those orders just cost it a fixed 0.002 and 0.001. With a mark standing it also
+  considers releasing it. Line height
   follows style, except late on: deep when leading after 75', high when trailing after
   70'.
 - **Hunting the ball**: when the opponent keeps the ball for several beats (and the
