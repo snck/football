@@ -134,10 +134,13 @@
     return TEMP.normal;
   }
 
+  /** What the CPU charges itself for a cover order (tuned on match results: looking ahead to the first-time move made it play worse). */
+  const PLAN = { cover: 0.002 };
+
   const pickSide = (m, mix) => { const r = m.rng(); return r < mix.L ? 'L' : r < mix.L + mix.R ? 'R' : 'C'; };
 
   FB.AI = {
-    V, candidates, scored, evOf, context,
+    V, candidates, scored, evOf, context, PLAN,
     chooseAttack(m) {
       const t = FB.carrier(m).team;
       const list = scored(m);
@@ -178,6 +181,7 @@
       const plans = [{}];
       const near = opts.press.map((id) => m.players[id]).sort((a, b) => dist(a, c) - dist(b, c));
       near.slice(0, 2).forEach((p) => plans.push({ press: p.id }));
+      near.slice(0, 2).forEach((p) => plans.push({ cover: p.id }));
       opts.tackle.forEach((id) => plans.push({ tackle: id }));
       // most dangerous receivers
       const base = scored(m);
@@ -194,7 +198,7 @@
           .sort((x, y) => dist(x, a) - dist(y, a))[0];
         if (d && dist(d, a) < 14) {
           plans.push({ mark: { d: d.id, a: aid } });
-          if (near[0]) plans.push({ press: near[0].id, mark: { d: d.id, a: aid } });
+          if (near[0]) plans.push({ press: near[0].id, mark: { d: d.id, a: aid } }, { cover: near[0].id, mark: { d: d.id, a: aid } });
         }
       }
       if (m.lines[t] !== 'deep') plans.push({ trap: true });
@@ -217,6 +221,7 @@
           A = softValue(scored(m), temp);
           FB.restore(m, snap);
         }
+        if (plan.cover != null) A += PLAN.cover;
         if (plan.press != null) A += 0.007 - style.press * 0.006;
         // the longer they keep it, the more we need to go and win it back (more so when not winning)
         const urgency = Math.max(0, (m.possStreak || 0) - 2) * (m.score[t] > m.score[c.team] ? 0.0015 : 0.003);

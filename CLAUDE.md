@@ -20,10 +20,10 @@ node tools/exploits.js 300 normal     # scripted "human" strategies vs CPU: [mat
 node tools/lines.js 400 3             # deep/normal/high line comparison: [matches per cell] [seed]
 node tools/timing.js 40 short         # estimated real-world match length: [matches] [length]
 node tools/diag.js 300 910000000      # goals by origin, action mix, shown vs actual odds, loose balls, presses: [matches] [seedBase]
-node tools/policies.js 1000 950000000 # fixed habits vs the CPU on Normal, with 95% intervals: [matches] [seedBase] [name filter]
+node tools/policies.js 1000 950000000 # fixed habits vs the CPU on Normal, with 95% intervals, all cores: [matches] [seedBase] [name filter]
 ```
 
-The sims run at roughly 10 matches per second (about 70 on 12 cores for `balance.js` and `mirror.js`, which use worker threads through `tools/pool.js`). `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
+The sims run at roughly 10 matches per second (about 70 on 12 cores for `balance.js`, `mirror.js` and `policies.js`, which use worker threads through `tools/pool.js`). `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
 
 ## Architecture
 
@@ -42,7 +42,7 @@ Three places implement this loop and must stay in step: `beat`/`attackPhase` in 
 
 **Displayed odds are the real odds.** `FB.evaluate(m, action)` is pure, uses no RNG, and returns the outcome distribution (probabilities sum to 1, tested). The UI previews, the CPU and `resolveAttack` all use it (tackles and penalties have `FB.tackleOdds` and `FB.penaltyGoal`). Who wins a loose ball is estimated by `FB.looseKeep`; it must keep matching `looseBall` (tested, and shown by `diag.js`). Put a rule change in `evaluate` and make the resolver roll from its numbers; don't add hidden modifiers at resolution. `TUNE` in `engine.js` holds most of the tunable constants.
 
-**CPU (`ai.js`).** Attack: generate candidates, score each by expected value over `evaluate`'s outcomes using the threat map `V`, then pick by softmax (temperature set by difficulty when facing a human; `createMatch({ human: 0 })` simulates that, `-1` is CPU vs CPU and ignores difficulty). Defence: apply each plan hypothetically (`FB.snapshot` → `applyDefense(m, plan, true)` → score the attacker's best options → `FB.restore`) and take the minimum. The snapshot covers only positions, `beaten` and `marks`, so a hypothetical plan that changes other state would leak.
+**CPU (`ai.js`).** Attack: generate candidates, score each by expected value over `evaluate`'s outcomes using the threat map `V`, then pick by softmax (temperature set by difficulty when facing a human; `createMatch({ human: 0 })` simulates that, `-1` is CPU vs CPU and ignores difficulty). Defence: apply each plan hypothetically (`FB.snapshot` → `applyDefense(m, plan, true)` → score the attacker's best options → `FB.restore`) and take the minimum. The snapshot covers only positions, `beaten`, `marks` and `cover`, so a hypothetical plan that changes other state would leak.
 
 **Animation.** Engine calls return timelines (`tl`): arrays of steps with `dur`, `moves`, `ball`, `owner`, `fx`, `caption`. State has already changed by then. `render.js` plays the timeline and `settle()` reconciles the display with the engine. The engine never waits on the UI; `game.js` waits on promises for human decisions, and `loopToken` invalidates a running loop on restart or quit. After an `await` in the beat loop, check the token.
 

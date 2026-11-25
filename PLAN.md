@@ -12,8 +12,8 @@ when the cycle is done.
 | 1a | Fixes with no balance effect (clear text, shot text, penalty mix) | **done** |
 | 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | **done** |
 | 2 | Re-tune Redmoor and the High line | **done** (user approved react 0.5, Redmoor 73) |
-| 3 | A. Cover / jockey | todo, **next** |
-| 4 | B. Lasting marks, costlier trap | todo |
+| 3 | A. Cover / jockey | **built; one target missed** (chain share): user to choose, see "Phase 3 result" |
+| 4 | B. Lasting marks, costlier trap | todo, **next** (after that choice) |
 | 5 | C. Teammate runs | todo |
 | 6 | D. Through balls (variety only; may be dropped after 3–5) | todo |
 | 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo |
@@ -53,7 +53,9 @@ Standing rules:
 | 820000000+ (24,000) | phase 2 clubs hold-out |
 | sim 42, 43 | phase 2 |
 | 960000000+, 965000000+ (1000 each), 962000000+ (200) and 963000000+ (100) for the loose-ball fit, sim 41 | phase 1b |
-| **970…, 980…, 990… (×10⁶) unused** | reserved: phases 3, 4, 5 (first half tuning, +5,000,000 hold-out) |
+| 970000000–973000000 blocks (970.0–970.4, 971.0, 971.1, 971.5, 972.0, 973.0 ×10⁶) | phase 3 tuning |
+| 975, 976, 977, 978 ×10⁶ | phase 3 hold-out |
+| **980…, 990… (×10⁶) unused** | reserved: phases 4, 5 (first half tuning, +5,000,000 hold-out) |
 
 ### Tools added for this cycle
 
@@ -281,6 +283,37 @@ position; cleared on turnover; snapshot/restore round-trip; dribble odds vs cove
 `policies.js`, and every fixed habit sits at least 0.10 points below the CPU baseline (press + mark + trap
 included; if that one still ties, it's phase 4's job); one-note exploits still lose; timing Normal at most 19.5 min.
 
+### Phase 3 result (2026-11-25)
+
+Built as specified except two things:
+- **No look-ahead in `chooseDefense`.** The specified one (coefficient 0.3) made the CPU weaker: the plan without it took +0.111 ±0.066 points
+  per mirror match with cover switched off and +0.089 ±0.066 with it on (6,000 each, same seeds, 971100000). Not diagnosed. The spec's
+  fallback is in: a constant, `FB.AI.PLAN.cover` = 0.002. With it the CPU uses cover in 20% of plans, at no measurable cost (+0.030 ±0.057 tuning,
+  **+0.046 ±0.046** on 12,000 hold-out matches, against the same CPU with cover off). 0.001 gives 30% of plans, 0.003 12%; points can't be told apart.
+- The slide is skipped when the defender is already goal-side and within 3.5 m. Its timeline caption keeps the pass's own caption.
+
+| Target | Result (hold-out) | |
+|---|---|---|
+| Chain share 35–44% | **50.9 ±1.0%** with cover, 50.1 ±1.0% on the phase 2 engine (4,000 matches each, 976000000) | **missed** |
+| Goals/team 1.10–1.35 | 1.236 ±0.022 (1.265 ±0.022 before) | ok |
+| CPU uses cover 10–35%, no plan over 40% | 19.6%; biggest plan 17.7% | ok |
+| Every habit 0.10 below the CPU (1.37 ±0.04) | press nearest 1.18, press + trap **1.29**, press + mark + trap **1.27**, cover + mark + trap 1.11 (±0.04 each, 4,000 matches, 978000000); on 1,000 matches cover 0.98, cover + mark 1.03 | cover habits ok; press + trap 0.08 and press + mark + trap 0.10 below, so phase 4's job |
+| One-note exploits lose | `exploits 300 normal`: thoughtful 171-62-67; shoot on sight 70-83-147, dribble only 97-90-113, hoof 36-97-167, safest pass 0-152-148, park the bus 59-40-201, always tackle/press 72-71-157, high line + trap 70-46-184 | ok |
+| Timing ≤ 19.5 min | 18.5 (18.4 before) | ok |
+
+Calibration on 975000000 (`diag.js 1000`): pass 79.4/79.3, through 64.6/64.4, lob 65.8/65.5, dribble 70.2/70.4, shot 13.7/14.1 (shown/actual). Speed
+11.0 → 8.7 matches/s on one core (more plans). Engine tests 28 → 33.
+
+**Why the target was missed (measured):** 75% of chain goals are a through ball followed by a first-time shot (509 chain goals, 400 matches). The
+receiver is a median of 22 m from the covering player before the slide and 18 m after (100 matches), so 4 m can't reach him. Slides of
+4, 7 and 10 m can't be told apart (forced cover, 2,000 matches: 1.36, 1.29, 1.28 chain goals per match, against 1.40 for hold or press).
+Letting the nearest defender slide instead, or the whole block slide, gave 46–48% of goals (1,000 matches each, ±2). Even a cover man who teleports to
+the receiver still left **44.8 ±2.0%**, so no one-defender slide gets to 35–44%.
+
+**Choice for the user (nothing changed for it):** keep Cover and drop the chain-share target, or act on the shot. Found on the way:
+first-time *passes* cost 5% accuracy but first-time **shots carry no penalty at all**. Scaling only their chance (tuning seeds, 2,000 matches each):
+×1 48.5% / 1.253 goals per team; ×0.85 46.7% / 1.176; ×0.7 41.3% / 1.078 (under the 1.10 floor). Not in the plan, not applied.
+
 ## Phase 4: B. Marks and traps
 
 **Why:** press + mark + trap every beat is about as good as the CPU's full look-ahead (1.27 vs 1.34, within error), and a
@@ -397,3 +430,7 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   results are identical to the old tool). Only two constants changed in `js/`. Correction: the message to the user said the greedy script improved
   (W162 L69 → W180 L58) "because balls behind Redmoor's line work more often". That cause was never tested and the change is within the error
   (final build W175 L61); the user was told. 28 tests passing. Not checked in a browser (phase 8).
+- 2026-11-25: phase 3, see "Phase 3 result" above. `policies.js` runs on all cores now (results match the old tool) and has the cover habits. Checked the new
+  UI by hand-driving headless Chrome from the scratchpad: desktop, 375×667 portrait and 667×375 landscape, no console errors, the four
+  mode buttons fit (the side panel scrolls by 25 px in portrait, 246 against 221). Click, key 4 and commit all deliver the order.
+  DEVLOG entry waits for phase 8; DESIGN, README, how-to text and CLAUDE.md are current.

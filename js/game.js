@@ -211,7 +211,7 @@
     const c = FB.carrier(m);
     const counter = quick && FB.isCounter(m);
     setPhase(counter ? `⚡ COUNTER-ATTACK — ${c.name}` : quick ? `⚡ FIRST-TIME CHANCE — ${c.name}` : `YOUR BALL — ${c.name} (#${c.num})`, 'attack');
-    const modes = $('modes'); modes.innerHTML = '';
+    const modes = $('modes'); modes.innerHTML = ''; modes.classList.remove('four');
     for (const [k, key, label] of MODES) {
       const b = document.createElement('button');
       b.innerHTML = `<kbd>${key}</kbd>${label}`;
@@ -330,7 +330,7 @@
       head = `Dribble ${Math.round(ev.d)} m`;
       big = pct(ev.p);
       if (!ev.challengers.length) lines.push('Nobody can get near you — free carry');
-      for (const x of ev.challengers) lines.push(`${nm(x.id)} challenges: tackle ${pct(x.pT)}, foul ${pct(x.pF)}`);
+      for (const x of ev.challengers) lines.push(`${nm(x.id)} challenges${x.jockey ? ' (covering: longer reach, half the fouls)' : ''}: tackle ${pct(x.pT)}, foul ${pct(x.pF)}`);
       lines.push(`Heavy touch risk ${pct(ev.lose)}`);
       if (ev.pFoul > 0.02) lines.push(`Win a free kick: ${pct(ev.pFoul)}${FB.inOppBox(FB.rel(HUMAN, ev.target)) ? ' — PENALTY if fouled in the box!' : ''}`);
     } else if (a.type === 'shoot') {
@@ -347,6 +347,9 @@
       big = `Kept ${pct(ev.p * keep)}`;
       lines.push(`Hoofs the ball ~40 m upfield, out of danger. A teammate gets to it first ${pct(keep)} of the time.`);
       if (ev.charge.p > 0.02) lines.push(`Charge-down risk ${pct(ev.charge.p)}`);
+    }
+    if (m.cover && !m.cover.used && m.quick < FB.TUNE.quickMax && (a.type === 'pass' || a.type === 'through' || a.type === 'lob' && !ev.header)) {
+      lines.push(`${nm(m.cover.id)} is covering: if this comes off he slides up to ${FB.TUNE.coverSlide} m towards ${nm(ev.recv != null ? ev.recv : ev.runner)}`);
     }
     const ln = lineNote(a, ev);
     if (ln) lines.push(ln);
@@ -408,18 +411,18 @@
   function cancelSel() { if (canCancel()) { UI.sel = null; refreshPreview(); } }
 
   // ------------------------------------------------------------------ human defense
-  const DMODES = [['press', '1', 'Press'], ['tackle', '2', 'Tackle'], ['mark', '3', 'Mark']];
+  const DMODES = [['press', '1', 'Press'], ['tackle', '2', 'Tackle'], ['mark', '3', 'Mark'], ['cover', '4', 'Cover']];
   function humanDefense() {
     const m = UI.m;
     UI.phase = 'defend';
     UI.plan = { line: m.lines[HUMAN] };
     UI.markFrom = null;
-    if (!['press', 'tackle', 'mark'].includes(UI.dmode)) UI.dmode = 'press';
+    if (!DMODES.some((x) => x[0] === UI.dmode)) UI.dmode = 'press';
     UI.threat = FB.AI.threatMap(m);
     UI.opts_def = FB.defenseOptions(m);
     const c = FB.carrier(m);
     setPhase(`DEFENDING — ${c.name} (#${c.num}) has it`, 'defend');
-    const modes = $('modes'); modes.innerHTML = '';
+    const modes = $('modes'); modes.innerHTML = ''; modes.classList.add('four');
     for (const [k, key, label] of DMODES) {
       const b = document.createElement('button');
       b.innerHTML = `<kbd>${key}</kbd>${label}`;
@@ -437,7 +440,7 @@
     setDMode(UI.dmode, true);
     setButtons('Confirm plan (Enter)', 'Hold shape (Space)');
     $('btnGo').disabled = false;
-    hint('Choose how to defend: press or tackle the carrier, tight-mark a threat (red rings), or just hold shape. You can combine one press or tackle with one mark.');
+    hint('Choose how to defend: press, tackle or cover the carrier, tight-mark a threat (red rings), or just hold shape. You can combine one press, tackle or cover with one mark.');
     return new Promise((resolve) => { UI.wait = { kind: 'defend', resolve }; });
   }
   function setDMode(k, silent) {
@@ -461,9 +464,11 @@
     const modeTxt = {
       press: `${v} one of your players inside the <b>big ring</b> to close the carrier down.`,
       tackle: `${v} one of your players inside the <b>small ring</b> to lunge for the ball now.`,
+      cover: `${v} one of your players inside the <b>big ring</b> to stand off the carrier and slide to whoever gets the next ball.`,
       mark: `${v} a dangerous opponent (red rings) to tight-mark them. ${v} your own player first to choose who marks.`,
     }[UI.dmode];
     if (P.press != null) lines.push(`<b>Press:</b> ${nm(P.press)} closes ${c.name} down. Every option gets harder for them, but ${nm(P.press)} leaves his zone and is caught upfield if bypassed.`);
+    if (P.cover != null) lines.push(`<b>Cover:</b> ${nm(P.cover)} stands off ${c.name}, then steps up to ${FB.TUNE.coverSlide} m towards whoever receives the next completed ball, before they can play it first-time. Harder to dribble past and half the fouls, but he puts less pressure on the pass.`);
     if (P.tackle != null) {
       const o = FB.tackleOdds(m, P.tackle);
       lines.push(`<b>Tackle:</b> ${nm(P.tackle)} lunges. <span class="risk-low">Win ${pct(o.pWin)}</span> · <span class="risk-high">foul ${pct(o.pFoul)}${FB.inOppBox(FB.rel(c.team, c)) ? ' = PENALTY' : ' (card risk)'}</span> · <span class="risk-vhigh">beaten ${pct(o.pBeat)}</span>`);
@@ -482,22 +487,26 @@
     if (id == null) return;
     const p = m.players[id];
     if (UI.dmode === 'press' && p.team === HUMAN) {
-      if (o.press.includes(id)) { P.press = P.press === id ? undefined : id; P.tackle = undefined; if (P.mark && P.mark.d === id) P.mark = undefined; }
+      if (o.press.includes(id)) { P.press = P.press === id ? undefined : id; P.tackle = undefined; P.cover = undefined; if (P.mark && P.mark.d === id) P.mark = undefined; }
       else flashHint(`${p.name} is too far away to press (must be inside the big ring).`);
+    } else if (UI.dmode === 'cover' && p.team === HUMAN) {
+      if (o.cover.includes(id)) { P.cover = P.cover === id ? undefined : id; P.press = undefined; P.tackle = undefined; if (P.mark && P.mark.d === id) P.mark = undefined; }
+      else flashHint(`${p.name} is too far away to cover (must be inside the big ring).`);
     } else if (UI.dmode === 'tackle' && p.team === HUMAN) {
-      if (o.tackle.includes(id)) { P.tackle = P.tackle === id ? undefined : id; P.press = undefined; if (P.mark && P.mark.d === id) P.mark = undefined; }
+      if (o.tackle.includes(id)) { P.tackle = P.tackle === id ? undefined : id; P.press = undefined; P.cover = undefined; if (P.mark && P.mark.d === id) P.mark = undefined; }
       else flashHint(`${p.name} is too far away to tackle (must be inside the small ring).`);
     } else if (UI.dmode === 'mark') {
       if (p.team === HUMAN && p.role !== 'GK' && !m.beaten.has(id)) { UI.markFrom = id; }
       else if (p.team === CPU && id !== m.carrier && p.role !== 'GK') {
         let d = UI.markFrom;
         if (d == null) {
-          const busy = new Set([P.press, P.tackle]);
+          const busy = new Set([P.press, P.tackle, P.cover]);
           d = FB.active(m, HUMAN).filter((q) => q.role !== 'GK' && !busy.has(q.id) && !m.beaten.has(q.id))
             .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0].id;
         }
         if (P.press === d) P.press = undefined;
         if (P.tackle === d) P.tackle = undefined;
+        if (P.cover === d) P.cover = undefined;
         P.mark = P.mark && P.mark.a === id && P.mark.d === d ? undefined : { d, a: id };
         UI.markFrom = null;
       }
@@ -509,7 +518,7 @@
   function commitDefense(hold) {
     if (!UI.wait || UI.wait.kind !== 'defend') return;
     const P = UI.plan;
-    const act = hold ? { line: P.line } : { press: P.press, tackle: P.tackle, mark: P.mark, trap: P.trap, line: P.line };
+    const act = hold ? { line: P.line } : { press: P.press, tackle: P.tackle, cover: P.cover, mark: P.mark, trap: P.trap, line: P.line };
     for (const k of Object.keys(act)) if (act[k] === undefined) delete act[k];
     const w = UI.wait; UI.wait = null;
     UI.phase = 'resolve';
@@ -536,6 +545,7 @@
     const parts = [];
     if (d.press != null) parts.push(`${nm(d.press)} presses you`);
     if (d.tackle != null) parts.push(`${nm(d.tackle)} lunges in!`);
+    if (d.cover != null) parts.push(`${nm(d.cover)} stands off and covers`);
     if (d.mark) parts.push(`${nm(d.mark.d)} marks ${nm(d.mark.a)}`);
     if (d.trap) parts.push('back line steps up (offside trap)');
     if (d.line && d.line !== 'normal') parts.push(`${d.line} line`);
@@ -767,6 +777,7 @@
   function drawAttackOverlay(ctx, R, c) {
     const m = UI.m; if (!c) return;
     const cd = R.disp[c.id];
+    if (m.cover && !m.cover.used) drawSlide(ctx, R, m.cover.id);
     if (UI.mode === 'dribble') {
       ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(R.px(cd.x), R.py(cd.y), FB.dribbleMax(c) * R.s, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
@@ -797,10 +808,14 @@
     for (const id of ev.threats || []) ring(ctx, R, id, '#ef5350', 1.9);
   }
   function drawCircle(ctx, R, p, r, color) { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(R.px(p.x), R.py(p.y), r * R.s, 0, Math.PI * 2); ctx.stroke(); }
+  /** How far the covering player may slide to the next receiver. */
+  function drawSlide(ctx, R, id) {
+    ctx.save(); ctx.setLineDash([3, 4]); drawCircle(ctx, R, R.disp[id], FB.TUNE.coverSlide, 'rgba(128,203,196,0.55)'); ctx.restore();
+  }
   function drawDefenseOverlay(ctx, R, c) {
     const m = UI.m; if (!c) return;
     const cd = R.disp[c.id];
-    const big = UI.dmode === 'press', small = UI.dmode === 'tackle';
+    const big = UI.dmode === 'press' || UI.dmode === 'cover', small = UI.dmode === 'tackle';
     ctx.save();
     ctx.setLineDash([5, 5]); ctx.lineWidth = big ? 2 : 1;
     ctx.strokeStyle = big ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
@@ -809,8 +824,8 @@
     ctx.strokeStyle = small ? 'rgba(255,138,101,0.9)' : 'rgba(255,138,101,0.3)';
     ctx.beginPath(); ctx.arc(R.px(cd.x), R.py(cd.y), FB.TUNE.tackleRange * R.s, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
-    const o = UI.opts_def || { press: [], tackle: [] };
-    const elig = UI.dmode === 'press' ? o.press : UI.dmode === 'tackle' ? o.tackle : [];
+    const o = UI.opts_def || { press: [], tackle: [], cover: [] };
+    const elig = UI.dmode === 'mark' ? [] : o[UI.dmode];
     for (const id of elig) ring(ctx, R, id, 'rgba(129,212,250,0.9)', 1.6);
     // threats
     // the three receivers the CPU most wants to find (brightest = most dangerous)
@@ -818,6 +833,7 @@
     top.forEach(([id], i) => ring(ctx, R, +id, `rgba(239,83,80,${0.95 - i * 0.25})`, 2.4 - i * 0.3));
     const P = UI.plan;
     if (P.press != null) arrow(ctx, R, R.disp[P.press], cd, '#81d4fa');
+    if (P.cover != null) { arrow(ctx, R, R.disp[P.cover], cd, '#80cbc4', [2, 5]); drawSlide(ctx, R, P.cover); }
     if (P.tackle != null) arrow(ctx, R, R.disp[P.tackle], cd, '#ff8a65');
     if (P.mark) { arrow(ctx, R, R.disp[P.mark.d], R.disp[P.mark.a], '#ce93d8', [6, 4]); ring(ctx, R, P.mark.a, '#ce93d8', 2.2); }
     if (UI.markFrom != null) ring(ctx, R, UI.markFrom, '#ce93d8', 2.0);

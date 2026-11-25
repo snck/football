@@ -17,6 +17,9 @@
     cost: { pass: 34, through: 36, lob: 38, dribble: 31, shot: 34, tackle: 27, restart: 20, goal: 60, penalty: 50 },
     quickPenalty: 0.05, quickMax: 3, quickCost: 0.35,
     pressRange: 14, tackleRange: 5, pressMove: 7.5, markMove: 10,
+    // Cover: stand off the carrier (`coverGap` m goal-side), step across (`coverSlide` m) to whoever receives the next
+    // completed ball, and jockey dribblers (longer reach, fewer fouls).
+    coverGap: 3.5, coverSlide: 4, jockeyReach: 0.7, jockeyFoul: 0.5,
     // Loose balls: the first to arrive gets it (distance / speed + up to `noise` s of luck, + `down` s if beaten).
     // `reach` fits looseKeep()'s estimate to that race; `scatter` is how far (m) the ball runs loose.
     loose: { noise: 0.9, down: 0.8, reach: 1,
@@ -68,7 +71,7 @@
       players: [], time: 0, half: 1, added: [null, null], score: [0, 0], poss: 0, carrier: null,
       ball: { x: L / 2, y: W / 2 }, restart: null, setPiece: null, lines: [o.home.style.line, o.away.style.line],
       stats: [mkStats(), mkStats()], feed: [], goals: [], beat: 0, over: false, momentum: 0,
-      beaten: new Set(), marks: {}, lastPasser: null, lastTouch: 0, halfEvents: { goals: 0, cards: 0, stops: 0 },
+      beaten: new Set(), marks: {}, cover: null, lastPasser: null, lastTouch: 0, halfEvents: { goals: 0, cards: 0, stops: 0 },
       phase: 'idle', history: [],
     };
     const diffAdj = { easy: -7, normal: 0, hard: 4 }[m.diff] || 0;
@@ -479,6 +482,7 @@
     m.beaten.clear();
     if (m.downed != null) { m.beaten.add(m.downed); m.downed = null; }
     m.marks = {};
+    m.cover = null;
     m.wall = null;
     m.setPiece = null;
     m.possStreak = m.lastPossTeam === m.poss ? (m.possStreak || 0) + 1 : 0;
@@ -511,6 +515,7 @@
     const ps = active(m, t).filter((p) => p.role !== 'GK' && !m.beaten.has(p.id));
     return {
       press: ps.filter((p) => dist(p, c) <= TUNE.pressRange).map((p) => p.id),
+      cover: ps.filter((p) => dist(p, c) <= TUNE.pressRange).map((p) => p.id),
       tackle: ps.filter((p) => dist(p, c) <= TUNE.tackleRange).map((p) => p.id),
       mark: ps.map((p) => p.id),
       targets: active(m, m.poss).filter((p) => p.id !== m.carrier && p.role !== 'GK').map((p) => p.id),
@@ -530,6 +535,12 @@
     const t = d.team;
     const cr = rel(t, c);
     return !active(m, t).some((p) => p !== d && p.role !== 'GK' && rel(t, p).x < cr.x - 1);
+  }
+
+  /** Where a covering player of team t stands: goal-side of p, at arm's length from a press. */
+  function coverSpot(p, t) {
+    const u = unit(p, ownGoal(t));
+    return clampPitch({ x: p.x + u.x * TUNE.coverGap, y: p.y + u.y * TUNE.coverGap });
   }
 
   /** Apply defensive moves (no randomness except tackle). Returns {tl, ended} */
@@ -562,6 +573,12 @@
       const u = unit(c, ownGoal(t));
       const tgt = clampPitch({ x: c.x + u.x * 1.5, y: c.y + u.y * 1.5 });
       moveTowards(d, tgt, TUNE.pressMove);
+      moves[d.id] = { x: d.x, y: d.y };
+    }
+    if (act.cover != null && act.press == null && act.tackle == null) {
+      const d = P(m, act.cover);
+      moveTowards(d, coverSpot(c, t), TUNE.pressMove);
+      m.cover = { id: d.id, used: false };
       moves[d.id] = { x: d.x, y: d.y };
     }
     if (hypothetical) return null;
@@ -921,12 +938,13 @@
       for (const o of active(m, opp(c.team))) {
         if (m.beaten.has(o.id) || o.role === 'GK' && !FB.inOppBox(rel(c.team, T))) continue;
         const sd = segDist(c, T, o);
-        const R = 2.3 + (o.attrs.pace - 60) * 0.02;
+        const jockey = m.cover && m.cover.id === o.id;
+        const R = 2.3 + (o.attrs.pace - 60) * 0.02 + (jockey ? TUNE.jockeyReach : 0);
         if (sd.d >= R) continue;
         const s = 1 - sd.d / R;
         const pT = clamp(TUNE.drTk * s * (1 + (o.attrs.tackle - c.attrs.dribble) * 0.015), 0.02, 0.62);
-        const pF = TUNE.drFoul * s * (FB.inOppBox(rel(c.team, sd.q)) ? 0.6 : 1);
-        ch.push({ id: o.id, pT, pF, t: sd.t, q: sd.q });
+        const pF = TUNE.drFoul * s * (FB.inOppBox(rel(c.team, sd.q)) ? 0.6 : 1) * (jockey ? TUNE.jockeyFoul : 1);
+        ch.push({ id: o.id, pT, pF, t: sd.t, q: sd.q, jockey });
       }
       ch.sort((a2, b) => a2.t - b.t);
       const lose = clamp(0.03 + dd * 0.003 + 0.05 * pc - (c.attrs.dribble - 72) * 0.002, 0.02, 0.2);
@@ -972,6 +990,7 @@
 
   function turnover(m, newP, how) {
     m.lastPasser = null;
+    m.cover = null;
     setCarrier(m, newP);
     if (how === 'intercept') m.stats[newP.team].interceptions++;
     // Winning the ball cleanly in open play (tackle or interception, not the keeper) lets the new
@@ -1171,6 +1190,7 @@
   FB.resolveAttack = function (m, a) {
     const out = resolveAttackInner(m, a);
     catchPresser(m);
+    coverSlide(m, out.tl);
     m.counter = false; // the counter move has been played (a completed pass may still go first-time)
     syncBall(m, out.tl);
     return out;
@@ -1182,6 +1202,23 @@
     if (!d || !c || d.off || c.team === d.team) return;
     const g = ownGoal(d.team);
     if (dist(c, g) < dist(d, g)) d.recover = Math.max(d.recover, 1);
+  }
+  /**
+   * Once per beat, after a completed ball that could be played on first-time, the covering player steps across towards
+   * the receiver. It happens here, before anyone decides on the first-time move, so its odds already include it.
+   */
+  function coverSlide(m, tl) {
+    const cv = m.cover;
+    if (!cv || cv.used || !m.quickOk || !FB.canQuick(m)) return;
+    const d = P(m, cv.id), c = carrierP(m);
+    if (c.team === d.team || d.off || m.beaten.has(d.id)) return;
+    cv.used = true;
+    const g = ownGoal(d.team), from = { x: d.x, y: d.y };
+    if (dist(d, c) > TUNE.coverGap || dist(d, g) > dist(c, g)) moveTowards(d, coverSpot(c, d.team), TUNE.coverSlide); // else goal-side and close already
+    if (dist(d, from) < 0.05) return;
+    const why = tl.length && tl[tl.length - 1].caption; // keep the reason for the pass on screen
+    tl.push({ dur: 0.25, moves: { [d.id]: { x: d.x, y: d.y } }, owner: c.id, caption: `${why ? why + ' · ' : ''}${d.name} slides across` });
+    if (m.beat % 3 === 0) say(m, 'coverSlide', { c: ctxP(d), b: ctxP(c), team: d.team }, 'quiet');
   }
   function syncBall(m, tl) {
     if (m.carrier != null) { m.ball = { x: P(m, m.carrier).x, y: P(m, m.carrier).y }; return; }
@@ -1556,8 +1593,9 @@
   };
 
   // snapshot helpers for AI look-ahead
-  FB.snapshot = (m) => ({ pos: m.players.map((p) => [p.x, p.y]), beaten: new Set(m.beaten), marks: Object.assign({}, m.marks) });
-  FB.restore = (m, s) => { m.players.forEach((p, i) => { p.x = s.pos[i][0]; p.y = s.pos[i][1]; }); m.beaten = s.beaten; m.marks = s.marks; };
+  FB.snapshot = (m) => ({ pos: m.players.map((p) => [p.x, p.y]), beaten: new Set(m.beaten), marks: Object.assign({}, m.marks),
+    cover: m.cover && Object.assign({}, m.cover) });
+  FB.restore = (m, s) => { m.players.forEach((p, i) => { p.x = s.pos[i][0]; p.y = s.pos[i][1]; }); m.beaten = s.beaten; m.marks = s.marks; m.cover = s.cover; };
   FB.carrier = carrierP;
   FB.HALF = HALF;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -18,6 +18,7 @@ function playBeat(m, policy = {}) {
       ended = r.ended;
       if (d.tackle != null) counts.tackleNow = (counts.tackleNow || 0) + 1;
       if (d.press != null) counts.press = (counts.press || 0) + 1;
+      if (d.cover != null) counts.cover = (counts.cover || 0) + 1;
       if (d.mark) counts.mark = (counts.mark || 0) + 1;
       if (d.trap) counts.trap = (counts.trap || 0) + 1;
     }

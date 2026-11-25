@@ -30,6 +30,7 @@
     loseTouch: ['{a} knocks it too far.', 'The ball runs away from {a}.'],
     tackleWon: ['Brilliant tackle by {c}!', '{c} flies in and wins it!', 'Ball won! {c} with a perfectly timed challenge.'],
     tackleBeat: ['{c} dives in... and {a} skips past him!', '{a} rides the challenge from {c}.', '{c} lunges and misses — {a} is free!'],
+    coverSlide: ['{c} slides across to {b}.', '{c} reads it and shuffles over to {b}.', '{c} gets goal-side of {b}.'],
     foul: ['Foul by {c} on {a}.', '{c} clips {a}. Free kick.', 'The referee blows — {c} was late on {a}.'],
     penalty: ['PENALTY! {c} brings down {a} in the box!', 'The referee points to the spot! {c} has fouled {a}!'],
     yellow: ['Yellow card for {c}.', '{c} goes into the book.'],

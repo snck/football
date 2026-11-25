@@ -24,8 +24,12 @@ eats more clock than quick play in the final third.
      pressure on every option the carrier has, but leaves that player's zone empty.
    - **Tackle**: one player within 5 m lunges for the ball *now*. The tackle can be
      won, can give away a foul (a card, or a penalty in the box), or the tackler can
-     be beaten and left on the floor for the rest of the beat. Press and Tackle
-     can't be combined.
+     be beaten and left on the floor for the rest of the beat.
+   - **Cover**: one player within 14 m stands off the carrier, 3.5 m goal-side (a press gets
+     to 1.5 m). After the next completed ball that could be played on first-time, he slides up
+     to 4 m towards the receiver, once, before the first-time decision is made. He also
+     jockeys dribblers: longer reach, half the fouls. Press, Tackle and Cover can't be
+     combined with each other.
    - **Mark**: one player tightly marks one opponent, goal-side at about 1.2 m.
    - **Line height** (Deep / Normal / High): a persistent setting, and a real
      trade-off (see section 3):
@@ -156,7 +160,14 @@ the odds you see are the real odds.
 - **Pressing has a cost**: a presser who is bypassed (the attackers keep the ball and the new
   carrier is nearer the presser's goal than the presser is) is caught upfield and moves at
   half speed in the next shape step. A press that forces the ball back, or wins it, costs
-  nothing. A player who loses a tackle, or is tackled, is down for a beat.
+  nothing. A covering player is never caught upfield.
+- **Cover**: the pressure on the carrier follows from the distance (about 0.44 of the scale
+  at 3.5 m, against 0.89 for a press). Against a dribble the covering player challenges from
+  0.7 m further away and his foul chance is halved. A through ball, pass or lofted ball
+  previewed against a cover names the slide that will follow; the first-time odds are worked
+  out after it. The slide itself matters little: the receiver is usually 15 m or more away
+  (in 100 matches, a median of 22 m before the slide and 18 m after).
+- A player who loses a tackle, or is tackled, is down for a beat.
 - Small random noise and skill differences leave room for luck and surprise.
 
 ## 4. How the CPU thinks
@@ -170,13 +181,15 @@ the odds you see are the real odds.
   possession teams value safety. So does game state: a team trailing late takes more
   risk, and a team leading late protects the ball. It picks with a softmax, which
   gives variety. The temperature depends on difficulty.
-- **Defence**: it builds up to about 10 defensive plans (hold; press with the nearest
+- **Defence**: it builds up to about 14 defensive plans (hold; press with the nearest
   1 or 2; tackle with anyone in range; mark the 2 most dangerous receivers; press and
-  mark combined; the offside trap unless the line is deep). It
+  mark combined; cover with the nearest 1 or 2, and cover and mark; the offside trap unless
+  the line is deep). It
   applies each one hypothetically and asks the attack evaluator how good the
   attacker's best options would be. It picks the plan that minimises the attacker's
   soft-max expected value, counting tackle outcomes too. That way it presses when
-  pressing helps and marks the man you were about to find. Line height
+  pressing helps and marks the man you were about to find. It can't see the cover slide, so
+  a cover order just costs it a fixed 0.002. Line height
   follows style, except late on: deep when leading after 75', high when trailing after
   70'.
 - **Hunting the ball**: when the opponent keeps the ball for several beats (and the
@@ -196,7 +209,7 @@ the odds you see are the real odds.
 | Space & positioning | Continuous 105×68 m pitch. Every probability is geometric (lanes, races, cones, pressure). The shape engine moves blocks realistically, so turnovers create counter-attack space. |
 | Ball flows (and tempo) | Every action animates: passes roll, lofted balls arc with a shadow, runners sprint onto through balls, keepers dive, the net ripples. |
 | Risk vs reward | Each option shows its success % and what happens if it fails. Safe recycling is 90%+, while splitting passes might be 35% for a 1-v-1. Expected-value scoring means good choices pay off more often than not. |
-| Both phases | Press, tackle, mark and line height, each with visible trade-offs and previews (tackle win/foul %, threat rings on dangerous opponents). |
+| Both phases | Press, tackle, cover, mark and line height, each with visible trade-offs and previews (tackle win/foul %, threat rings on dangerous opponents). |
 | Atmosphere | Match clock, stoppage-time board, live commentary, a synthesised crowd that swells with danger and roars on goals, a referee whistle, a GOAL banner with a slow-motion replay, a momentum bar, and a full-time stats screen. |
 | Readability | Coloured % badges on every option, lane lines with threatening defenders ringed, an offside warning, a "why" caption after every resolution, a context hint bar and a how-to-play overlay. |
 
@@ -260,8 +273,7 @@ list and were built in devlog cycle 5.
 
 - **Teammate runs:** tell one teammate to run in behind, overlap or drop short, taking
   effect on the next beat. The biggest change: it touches shape, the AI and the UI.
-- **Jockey, and a CPU that plans for dribbles:** stand off and slow a runner down
-  without lunging.
+- **A CPU that plans for dribbles** (jockeying itself is part of Cover).
 - **Set-piece choices:** short, near-post or far-post corners; short or long goal kicks.
 - **Half-time changes:** one decision on formation or attitude.
 - **Pressing fatigue:** players who press or tackle a lot lose some pace late on.

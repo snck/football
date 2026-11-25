@@ -41,7 +41,7 @@ console.log('goals per team dist', JSON.stringify(gd));
 console.log('top scores', Object.entries(scoreDist).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([k, v]) => `${k}:${v}`).join(' '));
 console.log('goal types', JSON.stringify(goalHow));
 console.log('teams', Object.entries(teamRec).map(([k, r]) => `${k} W${r.w} D${r.d} L${r.l} GF${r.gf} GA${r.ga}`).join(' | '));
-const act = ['pass', 'through', 'lob', 'dribble', 'shoot', 'penalty', 'press', 'tackleNow', 'mark', 'trap', 'quick', 'counter', 'counterDeclined', 'counterGoal'];
+const act = ['pass', 'through', 'lob', 'dribble', 'shoot', 'penalty', 'press', 'cover', 'tackleNow', 'mark', 'trap', 'quick', 'counter', 'counterDeclined', 'counterGoal'];
 console.log('actions/match', act.map((k) => `${k}:${f((counts[k] || 0) / N, 1)}`).join(' '));
 const res = Object.entries(counts).filter(([k]) => k.startsWith('r_')).sort();
 console.log('results', res.map(([k, v]) => `${k.slice(2)}:${f(v / N, 1)}`).join(' '));

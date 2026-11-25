@@ -276,6 +276,102 @@ test('press: only a presser who is bypassed is slowed next beat', () => {
   assert.equal(m.players[15].recover, 0, 'winning the ball costs him nothing');
 });
 
+/** Player 15 covers the carrier (7 at 50,34); 6 is a square option, 9 a forward one. Everyone else is out of the way. */
+function coverStage(act = { cover: 15 }) {
+  const m = fresh(3); clearPitch(m); give(m, 7, 50, 34);
+  Object.assign(m.players[6], { x: 48, y: 50 });
+  Object.assign(m.players[9], { x: 60, y: 46 });
+  Object.assign(m.players[15], { x: 54, y: 30 });
+  FB.applyDefense(m, act);
+  return m;
+}
+
+test('cover: stands off goal-side at less pressure than a press, and gives way to press or tackle', () => {
+  const m = coverStage(), d = m.players[15];
+  assert.ok(Math.abs(FB.dist(d, m.players[7]) - FB.TUNE.coverGap) < 1e-9);
+  assert.ok(d.x > 50, 'goal-side');
+  const p = FB.pressureOn(m, m.players[7]);
+  assert.ok(p > 0.3 && p < FB.pressureOn(coverStage({ press: 15 }), m.players[7]) - 0.3);
+  assert.equal(coverStage({ cover: 15, press: 16 }).cover, null);
+  assert.deepEqual(coverStage().cover, { id: 15, used: false });
+  assert.deepEqual(FB.defenseOptions(m).cover, FB.defenseOptions(m).press);
+});
+
+test('cover: slides once, up to 4 m towards the receiver of a completed ball, and the next odds include it', () => {
+  const m = coverStage(), d = m.players[15];
+  m.rng = () => 0.5; // accurate, not cut out, controlled
+  const b = { x: d.x, y: d.y };
+  const out = FB.resolveAttack(m, { type: 'pass', to: 9 });
+  assert.equal(out.result, 'ok');
+  assert.ok(Math.abs(FB.dist(d, b) - FB.TUNE.coverSlide) < 1e-9, `moved ${FB.dist(d, b)}`);
+  assert.equal(m.cover.used, true);
+  const step = out.tl[out.tl.length - 1];
+  assert.deepEqual(step.moves[15], { x: d.x, y: d.y });
+  // the first-time odds are those of the new position
+  FB.startQuick(m);
+  const at = FB.evaluate(m, { type: 'pass', to: 7 });
+  Object.assign(d, b);
+  assert.notEqual(FB.evaluate(m, { type: 'pass', to: 7 }).lane.p.toFixed(6), at.lane.p.toFixed(6));
+  Object.assign(d, step.moves[15]);
+  // not again in the same beat
+  Object.assign(m.players[8], { x: 62, y: 60 });
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 8 }).result, 'ok');
+  assert.deepEqual({ x: d.x, y: d.y }, step.moves[15]);
+  FB.startBeat(m);
+  assert.equal(m.cover, null, 'one beat only');
+});
+
+test('cover: no slide after a dribble, a turnover, once beaten, or when no first-time move is left', () => {
+  let m = coverStage(), d = m.players[15], b = { x: d.x, y: d.y };
+  m.rng = () => 0.99; // no heavy touch, not tackled
+  assert.equal(FB.resolveAttack(m, { type: 'dribble', target: { x: 46, y: 34 } }).result, 'ok');
+  assert.deepEqual({ x: d.x, y: d.y }, b);
+  m = coverStage(); d = m.players[15];
+  m.rng = () => 0.5;
+  m.players[16].x = 55; m.players[16].y = 40.4; // in the lane to 9
+  let n = 0; m.rng = () => (n++ ? 0 : 0.5);
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 9 }).result, 'intercepted');
+  assert.equal(m.cover, null, 'a turnover ends it');
+  m = coverStage(); d = m.players[15]; b = { x: d.x, y: d.y };
+  m.rng = () => 0.5; m.beaten.add(15);
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 9 }).result, 'ok');
+  assert.deepEqual({ x: d.x, y: d.y }, b);
+  m = coverStage(); d = m.players[15]; b = { x: d.x, y: d.y };
+  m.rng = () => 0.5; m.quick = FB.TUNE.quickMax;
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 9 }).result, 'ok');
+  assert.deepEqual({ x: d.x, y: d.y }, b);
+});
+
+test('cover: jockeying a dribble reaches further and fouls half as much; odds still sum to 1', () => {
+  const m = coverStage();
+  const a = { type: 'dribble', target: { x: 56, y: 37 } };
+  const cov = FB.evaluate(m, a);
+  m.cover = null;
+  const plain = FB.evaluate(m, a);
+  const x = cov.challengers.find((y) => y.id === 15), y = plain.challengers.find((z) => z.id === 15);
+  assert.ok(x && y && x.jockey && !y.jockey);
+  assert.ok(Math.abs(sumP(cov) - 1) < 1e-9);
+  assert.ok(x.pT > y.pT, 'closer to the middle of a longer reach');
+  assert.ok(x.pF < y.pF, `${x.pF} vs ${y.pF}`);
+  // same share of the reach: same tackle chance, half the foul chance
+  assert.ok(Math.abs((x.pF / x.pT) / (y.pF / y.pT) - 0.5) < 1e-9);
+});
+
+test('cover: a hypothetical plan leaves no trace after restore', () => {
+  const m = coverStage({});
+  const before = JSON.stringify([m.players.map((p) => [p.x, p.y]), m.marks, m.cover]);
+  const s = FB.snapshot(m);
+  FB.applyDefense(m, { cover: 15, mark: { d: 16, a: 9 } }, true);
+  assert.equal(m.cover.id, 15);
+  FB.restore(m, s);
+  assert.equal(JSON.stringify([m.players.map((p) => [p.x, p.y]), m.marks, m.cover]), before);
+  m.cover = { id: 15, used: false };
+  const s2 = FB.snapshot(m);
+  m.cover.used = true;
+  FB.restore(m, s2);
+  assert.deepEqual(m.cover, { id: 15, used: false });
+});
+
 test('dribble: a better dribbler takes fewer heavy touches', () => {
   const m = fresh(4); clearPitch(m); give(m, 7, 50, 34);
   const at = (d) => { m.players[7].attrs.dribble = d; return FB.evaluate(m, { type: 'dribble', target: { x: 58, y: 34 } }).lose; };

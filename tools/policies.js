@@ -1,6 +1,7 @@
 // Rule-of-thumb human policies vs the CPU on Normal: is a fixed habit as good as thinking?
 // Anything not overridden (attack, defence or first-time choices) is played by the CPU brain.
-// node tools/policies.js [matches] [seedBase] [name filter]
+// node tools/policies.js [matches] [seedBase] [name filter]      (uses all cores)
+const { pool, work, isMainThread } = require('./pool');
 const { FB, playMatch } = require('./runner');
 const N = +process.argv[2] || 400;
 const seed0 = +process.argv[3] || 1;
@@ -15,10 +16,10 @@ function markTop(m, busy) {
   }
   return null;
 }
-function plan(m, { press, mark, extra }) {
+function plan(m, { press, cover, mark, extra }) {
   const o = Object.assign({}, extra);
-  const n = press ? nearest(m) : null;
-  if (n) o.press = n.id;
+  const n = press || cover ? nearest(m) : null;
+  if (n) o[cover ? 'cover' : 'press'] = n.id;
   const k = mark ? markTop(m, n) : null;
   if (k) o.mark = k;
   return o;
@@ -39,6 +40,9 @@ const P = {
   'press + trap': { defense: (m) => plan(m, { press: 1, extra: { trap: true } }) },
   'press + mark + trap': { defense: (m) => plan(m, { press: 1, mark: 1, extra: { trap: true } }) },
   'press + mark, high line': { defense: (m) => plan(m, { press: 1, mark: 1, extra: { line: 'high' } }) },
+  'cover': { defense: (m) => plan(m, { cover: 1 }) },
+  'cover + mark': { defense: (m) => plan(m, { cover: 1, mark: 1 }) },
+  'cover + mark + trap': { defense: (m) => plan(m, { cover: 1, mark: 1, extra: { trap: true } }) },
   // the CPU picks with some randomness; 'greedy attack' is the fair reference for the '... first' habits
   'greedy attack': { attack: (m) => first(m, null) },
   'through ball first': { attack: (m) => first(m, 'through') },
@@ -47,16 +51,23 @@ const P = {
   'dribble first': { attack: (m) => first(m, 'dribble') },
   'always take a touch': { quick: () => null },
 };
-for (const [name, p] of Object.entries(P)) {
-  if (only && !name.includes(only)) continue;
-  const pol = {};
-  for (const k in p) pol[k] = { 0: p[k] };
-  let w = 0, d = 0, l = 0, gf = 0, ga = 0;
-  for (let i = 0; i < N; i++) {
-    const m = playMatch({ home: FB.TEAMS[i % 4], away: FB.TEAMS[(i % 4 + 1 + ((i >> 2) % 3)) % 4], seed: seed0 + i, human: 0, difficulty: 'normal' }, pol);
-    gf += m.score[0]; ga += m.score[1];
-    if (m.score[0] > m.score[1]) w++; else if (m.score[0] === m.score[1]) d++; else l++;
+if (!isMainThread) {
+  work(({ from, to, name, seed }) => {
+    const pol = {}, rows = [];
+    for (const k in P[name]) pol[k] = { 0: P[name][k] };
+    for (let i = from; i < to; i++) {
+      const m = playMatch({ home: FB.TEAMS[i % 4], away: FB.TEAMS[(i % 4 + 1 + ((i >> 2) % 3)) % 4], seed: seed + i, human: 0, difficulty: 'normal' }, pol);
+      rows.push(m.score);
+    }
+    return rows;
+  });
+} else (async () => {
+  for (const name of Object.keys(P)) {
+    if (only && !name.includes(only)) continue;
+    const rows = (await pool(__filename, N, { name, seed: seed0 }, 20)).flat();
+    const w = rows.filter(([f, a]) => f > a).length, d = rows.filter(([f, a]) => f === a).length;
+    const avg = (k) => (rows.reduce((s, r) => s + r[k], 0) / N).toFixed(2);
+    const pts = (3 * w + d) / N, se = Math.sqrt(Math.max(0, (9 * w + d) / N - pts * pts) / N);
+    console.log(`${name.padEnd(26)} W${w} D${d} L${N - w - d}  pts ${pts.toFixed(2)} ±${(1.96 * se).toFixed(2)}  GF ${avg(0)} GA ${avg(1)}`);
   }
-  const pts = (3 * w + d) / N, se = Math.sqrt(Math.max(0, (9 * w + d) / N - pts * pts) / N);
-  console.log(`${name.padEnd(26)} W${w} D${d} L${l}  pts ${pts.toFixed(2)} ±${(1.96 * se).toFixed(2)}  GF ${(gf / N).toFixed(2)} GA ${(ga / N).toFixed(2)}`);
-}
+})();
