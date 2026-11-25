@@ -343,8 +343,9 @@
       if (m.setPiece && m.setPiece.type === 'freekick') lines.push('Direct free kick: bend it over the wall');
     } else if (a.type === 'clear') {
       head = 'Clear it long';
-      big = 'Usually lost';
-      lines.push('Hoofs the ball ~40 m upfield, out of danger. The opponent usually gets to it first.');
+      const keep = ev.outcomes[0].keep;
+      big = `Kept ${pct(ev.p * keep)}`;
+      lines.push(`Hoofs the ball ~40 m upfield, out of danger. A teammate gets to it first ${pct(keep)} of the time.`);
       if (ev.charge.p > 0.02) lines.push(`Charge-down risk ${pct(ev.charge.p)}`);
     }
     const ln = lineNote(a, ev);

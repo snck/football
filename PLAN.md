@@ -10,8 +10,8 @@ when the cycle is done.
 |---|---|---|
 | 0 | Branch, commit tools, baseline | **done** (`ecd0847`) |
 | 1a | Fixes with no balance effect (clear text, shot text, penalty mix) | **done** |
-| 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | todo, **next** |
-| 2 | Re-tune Redmoor and the High line | todo, **needs numbers shown to the user before editing** |
+| 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | **done** |
+| 2 | Re-tune Redmoor and the High line | todo, **next**, **needs numbers shown to the user before editing** |
 | 3 | A. Cover / jockey | todo |
 | 4 | B. Lasting marks, costlier trap | todo |
 | 5 | C. Teammate runs | todo |
@@ -49,7 +49,8 @@ Standing rules:
 | 910000000+ (300), 920000000+ (300), 930000000+ (400), 940000000+ (200) | analysis behind this plan |
 | 950000000+ (1000), lines 31 | baseline below |
 | **800000000+ unused** | reserved: High-line hold-out (phase 2) |
-| **960…, 970…, 980…, 990… (×10⁶) unused** | reserved: phases 1b, 3, 4, 5 (first half tuning, +5,000,000 hold-out) |
+| 960000000+, 965000000+ (1000 each), 962000000+ (200) and 963000000+ (100) for the loose-ball fit, sim 41 | phase 1b |
+| **970…, 980…, 990… (×10⁶) unused** | reserved: phases 3, 4, 5 (first half tuning, +5,000,000 hold-out) |
 
 ### Tools added for this cycle
 
@@ -115,6 +116,31 @@ Reading (95% interval of a difference between two rows is about ±0.11):
 - Always taking a touch is weak (0.94 vs 1.34).
 
 `sim 300 11`, `exploits 300 normal`, `timing 40`: see DEVLOG "Current numbers". Engine tests: 21 passing.
+
+### After phase 1b: compare later phases with this, not with the table above
+
+`node tools/policies.js 1000 965000000` (before = 1a, same seeds; every change is within the error of a difference, ±0.11):
+
+```
+                        1a     1b
+baseline (CPU brain)    1.36   1.38 ±0.08  GF 1.26 GA 1.21
+hold shape always       0.63   0.68 ±0.07  GF 0.94 GA 1.97
+press nearest           1.23   1.19 ±0.08  GF 1.12 GA 1.35
+mark top threat         0.73   0.71 ±0.07  GF 0.91 GA 1.95
+press + mark            1.22   1.22 ±0.08  GF 1.14 GA 1.31
+press + trap            1.23   1.26 ±0.08  GF 1.13 GA 1.25
+press + mark + trap     1.27   1.22 ±0.08  GF 1.15 GA 1.32
+press + mark, high line 1.25   1.24 ±0.08  GF 1.31 GA 1.47
+greedy attack           1.90   1.84 ±0.08  GF 1.72 GA 1.05
+through ball first      1.54   1.46 ±0.08  GF 1.43 GA 1.30
+pass first              1.81   1.79 ±0.08  GF 1.61 GA 1.01
+lob first               1.24   1.19 ±0.08  GF 0.91 GA 1.11
+dribble first           1.56   1.66 ±0.08  GF 1.43 GA 1.05
+always take a touch     0.93   0.97 ±0.07  GF 0.75 GA 1.25
+```
+
+`node tools/diag.js 1000 965000000`: 2.51 goals/match (2.52 before); first-time chain 49.3% of goals, open play direct 27.5%,
+corner direct 16.0% (960000000: 2.52, 50.8%, 26.0%, 15.9%). Plans: press 24.9, press+mark 22.4, mark 18.9, tackle 15.8, trap 12.9, hold 5.1.
 
 ---
 
@@ -318,3 +344,18 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   1.21, xG 1.19 → 1.20, penalties scored 14 → 11; `exploits 300 normal` moves by at most 5 results in any
   row and every one-note script still loses more than it wins. No fresh seeds used. UI text checked by running the functions in
   Node, not in a browser (that's in phase 8). The DEVLOG entry waits for phase 8.
+- 2026-11-25: phase 1b. Accepted with **no tuning** (the `outcomeValue` offset wasn't needed). Press: `catchPresser` in the `resolveAttack`
+  wrapper, distance to the presser's goal, shots included (a rebound the attackers keep past him counts). Loose balls: the planned
+  "best arrival per side through a sigmoid" missed by up to 12 points, so `FB.looseKeep` runs the race at eight scatter points with a
+  cubic kernel instead; scatter sizes, noise and the beaten delay moved to `TUNE.loose`, shared with the resolver. Also: `outcomeValue`
+  had `keep || 0.3`, which would have turned a certain loss into 30%; `FB.active` is now a plain loop (same result, faster).
+  Assumed vs actual on 965000000, every row within 2 points: dribble touch 75.6/75.9, lob bad touch 62.2/62.5, lob misplaced 51.5/51.4, pass bad
+  touch 71.9/73.1, pass misplaced 65.8/66.7, through bad touch 62.1/62.6, through misplaced 41.4/42.4, clear 55.3/57.3 (n 260). The CPU
+  now clears less (0.5 → 0.3 per match) and only with someone upfield, so its clears are kept more than half the time; over
+  all positions where clearing is allowed it's about 24%.
+  Before → after, same seeds: `sim 300 11` goals/team 1.21 → 1.22, `sim 1000 41` 1.18 → 1.26 (diag blocks 2.40 → 2.52 and 2.52 → 2.51 goals/match, so no
+  clear rise). `exploits 300 normal` (W-D-L): shoot on sight 82-76-142 → 80-82-138, dribble only 91-90-119 → 83-95-122, hoof
+  45-99-156 → 37-79-184, park the bus 37-50-213 → 36-75-189, always tackle/press 92-74-134 → 78-77-145, high line + trap
+  69-65-166 → 82-64-154, safest pass 0-144-156 → 0-155-145, thoughtful 177-57-66 → 162-69-69: every one-note script still loses more than it wins.
+  Dribble success shown 66.9 → 68.9 (and as accurate). `timing 40` 18.6 → 18.5 min. Four tests added, 28 passing. Speed: about 16 → 10.5 matches/s
+  with the machine quiet (`sim`), which is what phase 3's "half the sim speed" now means. Clear preview shows "Kept X%"; not checked in a browser (phase 8).

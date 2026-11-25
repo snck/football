@@ -53,7 +53,8 @@ eats more clock than quick play in the final third.
    - **Shoot**. The chance depends on distance, angle, pressure, blockers in the
      cone and the shooter's finishing. Shots can be blocked, saved and held, parried
      for a corner, parried into a rebound, or go wide.
-   - **Clear**: hoof it about 40 m upfield. The opponent usually gets to it first.
+   - **Clear**: hoof it about 40 m upfield. The preview shows how often a teammate gets there
+     first; with nobody upfield, that's rarely.
 4. **Resolution (animated).** The ball and players move on the pitch, and the
    commentary and a "why" caption explain what happened and what the odds were.
 5. **Quick play (first-time).** After a *completed* pass, the receiver may act again
@@ -139,9 +140,19 @@ the odds you see are the real odds.
   | Lane-interception reach, defenders in the middle third | ×1 | ×1 | ×1.15 |
   | Head start (s) in aerial duels inside their own box | +0.25 | 0 | −0.1 |
 
-- **Pressing has a cost**: a presser who is bypassed is caught upfield and moves at
-  half speed in the next shape step. A player who loses a tackle, or is tackled, is
-  down for a beat.
+- **Loose balls** (misplaced passes, bad touches, heavy touches, clearances) go to whoever
+  gets there first: distance over speed, plus some luck. `evaluate` estimates who that will
+  be with `FB.looseKeep`, the same race run at eight spots the ball may roll to. The side
+  that lost it gets a misplaced pass back about two times in three, a misplaced lofted ball
+  about half the time and a misplaced through ball about 40%. A clearance depends on who is
+  upfield: a quarter of the time on average. The CPU uses the estimate to weigh risks, and the Clear
+  preview shows it.
+- **Heavy touches** when dribbling depend on distance and pressure, and on the carrier's
+  dribbling: 2 points less risk for every 10 points of skill.
+- **Pressing has a cost**: a presser who is bypassed (the attackers keep the ball and the new
+  carrier is nearer the presser's goal than the presser is) is caught upfield and moves at
+  half speed in the next shape step. A press that forces the ball back, or wins it, costs
+  nothing. A player who loses a tackle, or is tackled, is down for a beat.
 - Small random noise and skill differences leave room for luck and surprise.
 
 ## 4. How the CPU thinks

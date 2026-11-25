@@ -29,7 +29,7 @@
   function outcomeValue(m, t, o, ctx) {
     switch (o.k) {
       case 'keep': return 0.85 * V(t, o.pos) * (1 - 0.15 * Math.min(1, o.pressure || 0)) + ctx.prog * Math.max(0, rel(t, o.pos).x - ctx.x0) / L;
-      case 'loose': return (o.keep || 0.3) * V(t, o.pos) * 0.9 - (1 - (o.keep || 0.3)) * loss(t, o.pos) * ctx.lossW;
+      case 'loose': return o.keep * V(t, o.pos) * 0.9 - (1 - o.keep) * loss(t, o.pos) * ctx.lossW;
       case 'lose': return -loss(t, o.pos) * ctx.lossW;
       case 'clear': return -0.02 * ctx.lossW;
       case 'offside': return -loss(t, o.pos) * 0.6 * ctx.lossW;

@@ -208,6 +208,81 @@ test('shot pressure costs the share of the goal chance the preview quotes', () =
   assert.ok(Math.abs(at(0.5) / at(0) - (1 - FB.TUNE.shotPressure / 2)) < 1e-9);
 });
 
+test('loose balls: the keep chance evaluate() assumes is what the race gives', () => {
+  // [action, rolls that make it go loose, which loose outcome of evaluate() that is]
+  const cases = [
+    [{ type: 'pass', to: 9 }, [0.999], -1], [{ type: 'pass', to: 9 }, [0, 0.999], 0],
+    [{ type: 'through', target: { x: 74, y: 40 }, runner: 9 }, [0.999], -1], [{ type: 'through', target: { x: 74, y: 40 }, runner: 9 }, [0, 0, 0.999], 0],
+    [{ type: 'lob', to: 10 }, [0.999, 0.999], -1], [{ type: 'lob', to: 10 }, [0.999, 0, 0.999, 0, 0.999], 0],
+    [{ type: 'dribble', target: { x: 58, y: 31 } }, [0], 0], [{ type: 'clear' }, [0.999], 0]];
+  const stage = (seed) => {
+    const m = fresh(seed); clearPitch(m); give(m, 7, 50, 30);
+    for (const [id, x, y] of [[9, 66, 38], [10, 60, 14], [6, 44, 44], [13, 64, 31], [15, 70, 46], [16, 58, 22], [18, 54, 36]]) Object.assign(m.players[id], { x, y });
+    return m;
+  };
+  for (const [a, rolls, which] of cases) {
+    let kept = 0, n = 1500;
+    const loose = FB.evaluate(stage(1), a).outcomes.filter((o) => o.k === 'loose').at(which);
+    for (let i = 0; i < n; i++) {
+      const m = stage(1), r = FB.rng(i + 1);
+      let k = 0;
+      m.rng = () => (k < rolls.length ? rolls[k++] : r());
+      const res = FB.resolveAttack(m, a).result;
+      assert.ok(['misplaced', 'badtouch', 'touch', 'cleared'].includes(res), `${a.type} ${res}`);
+      if (m.carrier != null && m.poss === 0) kept++;
+    }
+    assert.ok(Math.abs(kept / n - loose.keep) < 0.07, `${a.type} ${rolls}: assumed ${loose.keep.toFixed(3)}, really ${(kept / n).toFixed(3)}`);
+  }
+});
+
+test('loose balls: a ball run out of play is lost, and the estimate changes nothing', () => {
+  const m = fresh(2); clearPitch(m); give(m, 7, 50, 34);
+  const before = JSON.stringify(m.players);
+  assert.equal(FB.looseKeep(m, { x: 50, y: -9 }, 0, { spread: 4 }), 0);
+  assert.ok(FB.looseKeep(m, { x: 50, y: 34 }, 0, { spread: 4 }) > 0.95);
+  assert.ok(FB.looseKeep(m, { x: 50, y: 34 }, 1, { spread: 4 }) < 0.05);
+  assert.equal(JSON.stringify(m.players), before);
+});
+
+test('press: only a presser who is bypassed is slowed next beat', () => {
+  const stage = () => {
+    const m = fresh(3); clearPitch(m); give(m, 7, 50, 34);
+    m.players[6].x = 40; m.players[6].y = 34; // square/back option
+    m.players[9].x = 64; m.players[9].y = 34; // ahead of the presser
+    m.players[15].x = 54; m.players[15].y = 34;
+    for (const p of m.players) p.recover = 0;
+    FB.applyDefense(m, { press: 15 });
+    return m;
+  };
+  let m = stage();
+  m.rng = () => 0.5; // accurate, not cut out, controlled
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 6 }).result, 'ok');
+  assert.equal(m.players[15].recover, 0, 'a backward pass does not bypass him');
+  // ... until a first-time ball goes past him in the same beat
+  FB.startQuick(m);
+  m.players[8].x = 64; m.players[8].y = 60;
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 8 }).result, 'ok');
+  assert.equal(m.players[15].recover, 1, 'a first-time ball past him does');
+  m = stage();
+  m.players[15].y = 40; // off the lane
+  m.rng = () => 0.5;
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 9 }).result, 'ok');
+  assert.equal(m.players[15].recover, 1, 'a forward pass past him does');
+  m = stage();
+  let n = 0;
+  m.rng = () => (n++ ? 0 : 0.5); // accurate, then cut out
+  assert.equal(FB.resolveAttack(m, { type: 'pass', to: 9 }).result, 'intercepted');
+  assert.equal(m.carrier, 15);
+  assert.equal(m.players[15].recover, 0, 'winning the ball costs him nothing');
+});
+
+test('dribble: a better dribbler takes fewer heavy touches', () => {
+  const m = fresh(4); clearPitch(m); give(m, 7, 50, 34);
+  const at = (d) => { m.players[7].attrs.dribble = d; return FB.evaluate(m, { type: 'dribble', target: { x: 58, y: 34 } }).lose; };
+  assert.ok(Math.abs(at(62) - at(82) - 0.04) < 1e-9, `${at(62)} ${at(82)}`);
+  assert.equal(at(99), 0.02); // floor
+});
+
 test('quick play: allowed after a completed pass, never allows dribbling', () => {
   const m = fresh(11);
   clearPitch(m);

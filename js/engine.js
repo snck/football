@@ -17,6 +17,10 @@
     cost: { pass: 34, through: 36, lob: 38, dribble: 31, shot: 34, tackle: 27, restart: 20, goal: 60, penalty: 50 },
     quickPenalty: 0.05, quickMax: 3, quickCost: 0.35,
     pressRange: 14, tackleRange: 5, pressMove: 7.5, markMove: 10,
+    // Loose balls: the first to arrive gets it (distance / speed + up to `noise` s of luck, + `down` s if beaten).
+    // `reach` fits looseKeep()'s estimate to that race; `scatter` is how far (m) the ball runs loose.
+    loose: { noise: 0.9, down: 0.8, reach: 1,
+      scatter: { passMiss: 8, passTouch: 3.5, throughMiss: 12, throughTouch: 4, lobMiss: 12, lobTouch: 4, dribble: 3, clear: 10 } },
     counterMax: 2,         // counter-attacks allowed per beat (stops endless ping-pong)
     // Line height trade-offs (the defending team's line):
     //  react: extra seconds an outfield defender needs to turn and chase a ball played in behind
@@ -34,7 +38,11 @@
   FB.lineFx = lineFx;
 
   // ------------------------------------------------------------------ helpers
-  const active = (m, t) => m.players.filter((p) => p.team === t && !p.off);
+  const active = (m, t) => { // ids are team * 11 + slot; a plain loop because evaluate leans on this
+    const out = [];
+    for (let i = t * 11; i < t * 11 + 11; i++) if (!m.players[i].off) out.push(m.players[i]);
+    return out;
+  };
   const opp = (t) => 1 - t;
   const speed = (p) => (p.role === 'GK' ? 5.4 : 5.6 + (p.attrs.pace - 50) * 0.045);
   const unit = (a, b) => { const d = dist(a, b) || 1; return { x: (b.x - a.x) / d, y: (b.y - a.y) / d }; };
@@ -672,6 +680,72 @@
   const pct = (p) => `${Math.round(p * 100)}%`;
   FB.pct = pct;
 
+  // ------------------------------------------------------------------ loose balls
+  /** Eight points standing in for scatter(): angles all round, radii from its 0.4-1.2 range. */
+  const SCATTER_PTS = Array.from({ length: 8 }, (_, i) => {
+    const a = (Math.PI * 2 * (i + 0.5)) / 8, r = i % 2 ? 0.6 : 1;
+    return [Math.cos(a) * r, Math.sin(a) * r];
+  });
+  // scratch, reused between calls (evaluate runs this very often)
+  const RUN = { x: new Float64Array(22), y: new Float64Array(22), v: new Float64Array(22), wait: new Float64Array(22), t: new Float64Array(22), near: new Int32Array(22) };
+  /**
+   * Chance that `team` (who touched it last) comes out with a ball running loose around pos. Pure: an estimate of the
+   * race in looseBall(). o.spread = scatter (m), o.exclude = id of a player who can't go for it, o.at = [[player, position]]
+   * for up to two players who will have moved by then. A ball out of play counts as lost.
+   */
+  FB.looseKeep = function (m, pos, team, o) {
+    const [a, b] = o.at || [];
+    return keepRace(m, pos, team, o.spread || 0, o.exclude, a && a[0], a && a[1], b && b[0], b && b[1]);
+  };
+  function keepRace(m, pos, team, spread, exclude, p1, at1, p2, at2) {
+    const { x, y, v, wait, t, near } = RUN, reach = TUNE.loose.reach;
+    const players = m.players, N = players.length, anyBeaten = m.beaten.size > 0;
+    const px = pos.x, py = pos.y;
+    let first = 1e9;
+    for (let i = 0; i < N; i++) {
+      const p = players[i];
+      t[i] = 1e9;
+      if (p.off || i === exclude) continue;
+      const pt = p === p1 ? at1 : p === p2 ? at2 : p;
+      const gk = p.role === 'GK';
+      const ax = pt.x, ay = pt.y, dx = ax - px, dy = ay - py;
+      const iv = 1 / speed(p), w = anyBeaten && m.beaten.has(i) ? TUNE.loose.down : 0;
+      const ti = Math.sqrt(dx * dx + dy * dy) * iv + w;
+      x[i] = ax; y[i] = ay; v[i] = iv; wait[i] = w; t[i] = ti;
+      if (!gk && ti < first) first = ti;
+    }
+    const limit = first + (1.2 * spread) / 5.5 + reach; // leaving out anyone slower makes no difference
+    let n = 0;
+    for (let i = 0; i < N; i++) if (t[i] < limit) near[n++] = i;
+    let sum = 0;
+    for (let k = 0; k < SCATTER_PTS.length; k++) {
+      const qx = px + SCATTER_PTS[k][0] * spread, qy = py + SCATTER_PTS[k][1] * spread;
+      if (qx < 0 || qx > L || qy < 0 || qy > W) continue;
+      let best = 1e9;
+      for (let j = 0; j < n; j++) {
+        const i = near[j], p = players[i];
+        if (p.role === 'GK' && !FB.inOppBox(rel(opp(p.team), { x: qx, y: qy }))) { t[i] = 1e9; continue; }
+        const dx = x[i] - qx, dy = y[i] - qy;
+        const ti = Math.sqrt(dx * dx + dy * dy) * v[i] + wait[i];
+        t[i] = ti;
+        if (ti < best) best = ti;
+      }
+      let ours = 0, all = 0;
+      for (let j = 0; j < n; j++) {
+        const i = near[j], z = reach + best - t[i];
+        if (z <= 0) continue;
+        const w = z * z * z;
+        all += w;
+        if (i < 11 === (team === 0)) ours += w;
+      }
+      if (all > 0) sum += ours / all;
+    }
+    return sum / SCATTER_PTS.length;
+  }
+  // how evaluate() uses it: the same spots, scatter and movement as the resolver
+  const missKeep = (m, c, T, spread) => keepRace(m, T, c.team, spread, c.id);
+  const touchKeep = (m, r, T, spread, rival, k) => keepRace(m, T, r.team, spread, -1, r, T, rival, rival ? lerp2(rival, T, k) : null);
+
   // ------------------------------------------------------------------ attack options
   FB.allowedActions = function (m) {
     const sp = m.setPiece && m.setPiece.type;
@@ -694,6 +768,7 @@
     const mom = (c.team === 0 ? m.momentum : -m.momentum) * 0.02 - (m.quick ? TUNE.quickPenalty : 0);
     const pc = pressureOn(m, c);
     const sp = m.setPiece && m.setPiece.type;
+    const SC = TUNE.loose.scatter;
     if (a.type === 'pass') {
       const r = P(m, a.to);
       if (!r || r.team !== c.team || r === c || r.off) return { valid: false, reason: 'Pick a teammate' };
@@ -710,9 +785,9 @@
       const pSucc = pClean * ctrl * (1 - offP);
       const outcomes = [
         { p: pSucc, k: 'keep', pos: { x: r.x, y: r.y }, pressure: pr, id: r.id },
-        { p: pClean * (1 - ctrl) * (1 - offP), k: 'loose', pos: { x: r.x, y: r.y }, keep: 0.35 },
+        { p: pClean * (1 - ctrl) * (1 - offP), k: 'loose', pos: { x: r.x, y: r.y }, keep: touchKeep(m, r, r, SC.passTouch) },
         { p: pClean * offP, k: 'offside', pos: { x: r.x, y: r.y } },
-        { p: (1 - exec), k: 'loose', pos: { x: r.x, y: r.y }, keep: 0.25 },
+        { p: (1 - exec), k: 'loose', pos: { x: r.x, y: r.y }, keep: missKeep(m, c, r, SC.passMiss) },
         { p: exec * lane.p, k: 'lose', pos: lane.list[0] ? lane.list[0].q : r }];
       return { valid: true, type: 'pass', p: pSucc, exec, lane, ctrl, recvPressure: pr, offP, d, outcomes, target: { x: r.x, y: r.y }, recv: r.id,
         threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id) };
@@ -760,10 +835,10 @@
       const pSucc = pClean * pRace * ctrl * on;
       const outcomes = [
         { p: pSucc, k: 'keep', pos: T, pressure: chaser ? clamp((6 - Math.max(0, (defT - arrive) * 6)) / 5, 0, 1) : 0, id: r.id },
-        { p: pClean * pRace * (1 - ctrl) * on, k: 'loose', pos: T, keep: 0.4 },
+        { p: pClean * pRace * (1 - ctrl) * on, k: 'loose', pos: T, keep: touchKeep(m, r, T, SC.throughTouch, chaser, 0.7) },
         { p: pClean * (1 - pRace) * on, k: 'lose', pos: T },
         { p: pClean * offP, k: 'offside', pos: { x: r.x, y: r.y } }];
-      outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: 0.2 });
+      outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.throughMiss) });
       outcomes.push({ p: exec * lane.p, k: 'lose', pos: lane.list[0] ? lane.list[0].q : T });
       return { valid: true, type: 'through', p: pSucc, exec, lane, pRace, ctrl, offP, runner: r.id, chaser: chaser && chaser.id,
         runT, defT, ballT, d: dP, outcomes, target: T, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0, threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id).concat(chaser ? [chaser.id] : []) };
@@ -825,11 +900,11 @@
         ctrl = clamp(0.88 - 0.15 * pressureOn(m, r, T) + (r.attrs.dribble - 70) * 0.002, 0.55, 0.95);
         pSucc = pc0 * on * (1 - pClaim) * pWin * ctrl;
         outcomes.push({ p: pSucc, k: 'keep', pos: T, pressure: pressureOn(m, r, T), id: r.id });
-        outcomes.push({ p: pc0 * on * (1 - pClaim) * pWin * (1 - ctrl), k: 'loose', pos: T, keep: 0.4 });
+        outcomes.push({ p: pc0 * on * (1 - pClaim) * pWin * (1 - ctrl), k: 'loose', pos: T, keep: touchKeep(m, r, T, SC.lobTouch, duel, 0.75) });
         outcomes.push({ p: pc0 * on * pClaim, k: 'lose', pos: T, gk: true });
         outcomes.push({ p: pc0 * on * (1 - pClaim) * (1 - pWin), k: 'clear', pos: T });
       }
-      outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: 0.25 });
+      outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.lobMiss) });
       outcomes.push({ p: exec * charge.p, k: 'lose', pos: c });
       return { valid: true, type: 'lob', p: pSucc, exec, charge, pWin, pClaim, ctrl, header, shot, offP, recv: r.id, duel: duel && duel.id, aerial,
         d: dP, outcomes, target: T, threats: (duel ? [duel.id] : []).concat(pClaim > 0.1 && gk ? [gk.id] : []) };
@@ -854,9 +929,9 @@
         ch.push({ id: o.id, pT, pF, t: sd.t, q: sd.q });
       }
       ch.sort((a2, b) => a2.t - b.t);
-      const lose = clamp(0.03 + dd * 0.003 + 0.05 * pc, 0.02, 0.2);
+      const lose = clamp(0.03 + dd * 0.003 + 0.05 * pc - (c.attrs.dribble - 72) * 0.002, 0.02, 0.2);
       let surv = 1 - lose;
-      const outcomes = [{ p: lose, k: 'loose', pos: T, keep: 0.35 }];
+      const outcomes = [{ p: lose, k: 'loose', pos: T, keep: keepRace(m, lerp2(c, T, 1.3), c.team, SC.dribble, -1, c, lerp2(c, T, 0.8)) }];
       for (const x of ch) {
         outcomes.push({ p: surv * x.pT, k: 'lose', pos: x.q });
         outcomes.push({ p: surv * x.pF, k: 'foulFor', pos: x.q });
@@ -872,7 +947,7 @@
       const T = abs(c.team, { x: clamp(cr.x + 42, 30, L - 8), y: clamp(cr.y + (34 - cr.y) * 0.4, 6, 62) });
       const charge = laneRisk(m, c, T, c.team, 14, { endT: 0.06, maxR: 2.2 });
       return { valid: true, type: 'clear', p: 1 - charge.p, charge, target: T, d: dist(c, T),
-        outcomes: [{ p: 1 - charge.p, k: 'loose', pos: T, keep: 0.4 }, { p: charge.p, k: 'lose', pos: c }], threats: [] };
+        outcomes: [{ p: 1 - charge.p, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.clear) }, { p: charge.p, k: 'lose', pos: c }], threats: [] };
     }
     if (a.type === 'shoot') {
       if (!allowed.shoot) return { valid: false, reason: 'Too far to shoot' };
@@ -978,7 +1053,7 @@
     for (const p of m.players) {
       if (p.off || (exclude && exclude.has(p.id))) continue;
       if (p.role === 'GK' && !FB.inOppBox(rel(opp(p.team), pos))) continue;
-      let tt = dist(p, pos) / speed(p) + m.rng() * 0.9 + (m.beaten.has(p.id) ? 0.8 : 0);
+      let tt = dist(p, pos) / speed(p) + m.rng() * TUNE.loose.noise + (m.beaten.has(p.id) ? TUNE.loose.down : 0);
       if (keepBias && p.team === lastTeam) tt -= keepBias;
       if (tt < bt) { bt = tt; best = p; }
     }
@@ -1095,10 +1170,19 @@
   /** Resolve the attacking action; mutates state; returns {tl, result} */
   FB.resolveAttack = function (m, a) {
     const out = resolveAttackInner(m, a);
+    catchPresser(m);
     m.counter = false; // the counter move has been played (a completed pass may still go first-time)
     syncBall(m, out.tl);
     return out;
   };
+  /** A presser who gets bypassed is caught upfield: half speed in the next shape step. */
+  function catchPresser(m) {
+    const d = m.defAct && m.defAct.press != null ? P(m, m.defAct.press) : null;
+    const c = carrierP(m);
+    if (!d || !c || d.off || c.team === d.team) return;
+    const g = ownGoal(d.team);
+    if (dist(c, g) < dist(d, g)) d.recover = Math.max(d.recover, 1);
+  }
   function syncBall(m, tl) {
     if (m.carrier != null) { m.ball = { x: P(m, m.carrier).x, y: P(m, m.carrier).y }; return; }
     for (let i = tl.length - 1; i >= 0; i--) if (tl[i].ball) { m.ball = { x: tl[i].ball.x, y: tl[i].ball.y }; return; }
@@ -1115,11 +1199,10 @@
     m.cost *= lerp(1.4, 0.55, clamp((rel(c.team, c).x - 20) / 70, 0, 1));
     if (m.setPiece) m.cost += TUNE.cost.restart;
     if (!ev.valid) throw new Error('Invalid action: ' + ev.reason);
-    // a presser who gets bypassed is caught upfield next beat
-    if (m.defAct && m.defAct.press != null && a.type !== 'shoot') P(m, m.defAct.press).recover = Math.max(P(m, m.defAct.press).recover, 1);
     m.lastAction = { a, ev, team: t };
     if (m.quick) m.cost *= TUNE.quickCost;
     m.totalCost = (m.totalCost || 0) + 0;
+    const SC = TUNE.loose.scatter;
     let result = null;
     const roll = () => m.rng();
     if (a.type === 'pass' || a.type === 'through') {
@@ -1129,7 +1212,7 @@
       const spd = a.type === 'pass' ? 24 : 22;
       if (roll() > ev.exec) {
         // misplaced
-        const lp = scatter(m, target, a.type === 'through' ? 12 : 8);
+        const lp = scatter(m, target, a.type === 'through' ? SC.throughMiss : SC.passMiss);
         tl.push({ dur: dist(c, lp) / spd, ball: { x: lp.x, y: lp.y, arc: 0 }, owner: null, caption: `Misplaced (${pct(1 - ev.exec)} risk)` });
         say(m, 'misplaced', { a: ctxP(c), team: t }, 'bad');
         looseBall(m, lp, t, tl, new Set([c.id]), 0);
@@ -1169,7 +1252,7 @@
         }
         if (roll() > ev.ctrl) {
           say(m, 'badTouch', { a: ctxP(r), team: t }, 'bad');
-          looseBall(m, scatter(m, target, 4), t, tl, null, 0);
+          looseBall(m, scatter(m, target, SC.throughTouch), t, tl, null, 0);
           return { tl, result: 'badtouch', ev };
         }
         st.passesOk++;
@@ -1186,7 +1269,7 @@
       if (roll() > ev.ctrl) {
         tl[tl.length - 1].caption = `Heavy touch under pressure (${pct(1 - ev.ctrl)} risk)`;
         say(m, 'badTouch', { a: ctxP(r), team: t }, 'bad');
-        looseBall(m, scatter(m, target, 3.5), t, tl, null, 0);
+        looseBall(m, scatter(m, target, SC.passTouch), t, tl, null, 0);
         return { tl, result: 'badtouch', ev };
       }
       st.passesOk++;
@@ -1212,7 +1295,7 @@
         return { tl, result: 'blocked', ev };
       }
       if (roll() > ev.exec) {
-        const lp = scatter(m, T, 12);
+        const lp = scatter(m, T, SC.lobMiss);
         tl.push({ dur, ball: { x: lp.x, y: lp.y, arc: 1 }, owner: null, caption: `Overhit (${pct(1 - ev.exec)} risk)` });
         say(m, 'misplaced', { a: ctxP(c), team: t }, 'bad');
         looseBall(m, lp, t, tl, new Set([c.id]), 0);
@@ -1262,7 +1345,7 @@
       }
       if (roll() > ev.ctrl) {
         say(m, 'badTouch', { a: ctxP(r), team: t }, 'bad');
-        looseBall(m, scatter(m, T, 4), t, tl, null, 0);
+        looseBall(m, scatter(m, T, SC.lobTouch), t, tl, null, 0);
         return { tl, result: 'badtouch', ev };
       }
       st.passesOk++;
@@ -1277,7 +1360,7 @@
       st.dribbles++;
       const T = ev.target;
       if (roll() < ev.lose) {
-        const lp = scatter(m, { x: lerp(c.x, T.x, 1.3), y: lerp(c.y, T.y, 1.3) }, 3);
+        const lp = scatter(m, lerp2(c, T, 1.3), SC.dribble);
         tl.push({ dur: 0.6, moves: { [c.id]: lerp2(c, T, 0.8) }, ball: { x: lp.x, y: lp.y, arc: 0 }, owner: null, caption: `Heavy touch (${pct(ev.lose)} risk)` });
         c.x = lerp(c.x, T.x, 0.8); c.y = lerp(c.y, T.y, 0.8);
         say(m, 'loseTouch', { a: ctxP(c), team: t }, 'bad');
@@ -1328,7 +1411,7 @@
         looseBall(m, scatter(m, c, 5), opp(t), tl, null, 0);
         return { tl, result: 'blocked', ev };
       }
-      const lp = scatter(m, ev.target, 10);
+      const lp = scatter(m, ev.target, SC.clear);
       tl.push({ dur: 1.2, ball: { x: lp.x, y: lp.y, arc: 1.2 }, owner: null, caption: 'Cleared long' });
       say(m, 'clear', { a: ctxP(c), team: t }, 'quiet');
       looseBall(m, lp, t, tl, new Set([c.id]), 0);

@@ -22,7 +22,7 @@ node tools/diag.js 300 910000000      # goals by origin, action mix, shown vs ac
 node tools/policies.js 1000 950000000 # fixed habits vs the CPU on Normal, with 95% intervals: [matches] [seedBase] [name filter]
 ```
 
-The sims run at roughly 15 matches per second. `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
+The sims run at roughly 10 matches per second. `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
 
 ## Architecture
 
@@ -39,7 +39,7 @@ Every file in `js/` is a plain-script IIFE attaching to a global `FB` (`window` 
 
 Three places implement this loop and must stay in step: `beat`/`attackPhase` in `js/game.js`, `playBeat` in `tools/runner.js`, and `tools/timing.js`. Quick and counter options must be evaluated with the first-time penalty on (`m.quick` incremented, by `startQuick` or temporarily as in `AI.chooseQuick` and `runner.js`). This was wrong once in the UI and once in the test harness (DEVLOG cycles 2 and 3).
 
-**Displayed odds are the real odds.** `FB.evaluate(m, action)` is pure, uses no RNG, and returns the outcome distribution (probabilities sum to 1, tested). The UI previews, the CPU and `resolveAttack` all use it (tackles and penalties have `FB.tackleOdds` and `FB.penaltyGoal`). Put a rule change in `evaluate` and make the resolver roll from its numbers; don't add hidden modifiers at resolution. `TUNE` in `engine.js` holds most of the tunable constants.
+**Displayed odds are the real odds.** `FB.evaluate(m, action)` is pure, uses no RNG, and returns the outcome distribution (probabilities sum to 1, tested). The UI previews, the CPU and `resolveAttack` all use it (tackles and penalties have `FB.tackleOdds` and `FB.penaltyGoal`). Who wins a loose ball is estimated by `FB.looseKeep`; it must keep matching `looseBall` (tested, and shown by `diag.js`). Put a rule change in `evaluate` and make the resolver roll from its numbers; don't add hidden modifiers at resolution. `TUNE` in `engine.js` holds most of the tunable constants.
 
 **CPU (`ai.js`).** Attack: generate candidates, score each by expected value over `evaluate`'s outcomes using the threat map `V`, then pick by softmax (temperature set by difficulty when facing a human; `createMatch({ human: 0 })` simulates that, `-1` is CPU vs CPU and ignores difficulty). Defence: apply each plan hypothetically (`FB.snapshot` → `applyDefense(m, plan, true)` → score the attacker's best options → `FB.restore`) and take the minimum. The snapshot covers only positions, `beaten` and `marks`, so a hypothetical plan that changes other state would leak.
 
