@@ -1,14 +1,15 @@
 # Touchline Tactics — Design
 
-A turn-based, 11-a-side football game for the desktop browser. Every turn ("beat")
+A turn-based, 11-a-side football game for the browser, on desktop, tablet or phone. Every turn ("beat")
 is a short passage of play: the defending side sets its trap, the side in possession
 reads the picture and chooses what to do with the ball, then the move plays out on
 the pitch. You get unlimited time on every decision.
 
 ## 1. Core turn loop: the beat
 
-A Normal match is about 120 beats; a Short match is about 85. A beat costs 25 to 60
-game seconds, depending on the action and where it happens. Build-up in your own half
+A Normal match is about 105 beats; a Short match is about 78. On Normal a beat usually
+costs 25 to 110 game seconds (median about 50), depending on the action, where it
+happens and how much first-time play follows. Build-up in your own half
 eats more clock than quick play in the final third.
 
 1. **Shape step (automatic).** Both teams move toward their tactical shape around
@@ -21,7 +22,7 @@ eats more clock than quick play in the final third.
 2. **Defensive decision (the side without the ball).** It may choose any of:
    - **Press**: one player closes the carrier down to about 1.5 m. This puts
      pressure on every option the carrier has, but leaves that player's zone empty.
-   - **Tackle**: one player within 7 m lunges for the ball *now*. The tackle can be
+   - **Tackle**: one player within 5 m lunges for the ball *now*. The tackle can be
      won, can give away a foul (a card, or a penalty in the box), or the tackler can
      be beaten and left on the floor for the rest of the beat. Press and Tackle
      can't be combined.
@@ -30,8 +31,10 @@ eats more clock than quick play in the final third.
      trade-off (see section 3):
      - **Deep** protects the box. Shots are blocked more, headers in the box are won
        more often, lanes near the box are tighter, and defenders are already set for
-       balls in behind. The cost: the opponent gets more of the ball and more
-       corners, and you win it back far from their goal.
+       balls in behind. The cost: a few more shots from inside the box and corners
+       against, and you win the ball back slightly further from their goal (about
+       38 m from your own goal, against 40 m for Normal and 42 m for High). It doesn't
+       change possession.
      - **High** squeezes midfield (tighter lanes there) and wins the ball back
        higher, so counters start closer to goal. The cost: defenders have to turn
        and chase balls over the top, and fewer bodies are back to block shots.
@@ -45,7 +48,7 @@ eats more clock than quick play in the final third.
    - **Lofted pass / cross** to a player or a spot. It flies over the lines, but the
      landing is contested in the air. A cross into the box that is won becomes a
      header at goal.
-   - **Dribble** up to about 9 m. Defenders near the path challenge. A successful
+   - **Dribble** up to 7.5–12 m, depending on pace. Defenders near the path challenge. A successful
      dribble leaves them beaten and slow to recover.
    - **Shoot**. The chance depends on distance, angle, pressure, blockers in the
      cone and the shooter's finishing. Shots can be blocked, saved and held, parried
@@ -67,9 +70,10 @@ eats more clock than quick play in the final third.
    for first-time play: −5% accuracy and no dribbling. A completed counter pass can be
    followed by more first-time play. At most two counters can happen in one beat.
    *Why:* see devlog cycle 5. Before this, a turnover just ended the beat, and the
-   shape step gave the team that lost the ball time to get back. Now losing the ball
-   upfield costs something, and pressing or a high line pays off when it wins the
-   ball.
+   shape step gave the team that lost the ball time to get back. Now the winner gets a
+   move against a team that is still out of shape. There are about 15 counters per
+   match (both sides). Most of their value is in the position they win: the counter
+   move itself scores only about 0.1 goals per match.
    *Why no dribbling:* with dribbling allowed, a "dribble only" script went from
    losing to winning, because every ball won came with a free carry.
 
@@ -100,8 +104,8 @@ ball, and the attack when you have it. This keeps the pace up and the match insi
   penalty awarded after time is up is still taken.
 - **Left out on purpose**: substitutions, fatigue and injuries. They add menus and
   bookkeeping but little moment-to-moment decision-making in a 15-minute match.
-  Also left out: switching ends at half-time. You always attack left to right, for
-  readability.
+  Also left out: switching ends at half-time. You always attack the same way (left to
+  right, or up the screen on an upright phone), for readability.
 
 ## 3. Probability model (summary)
 
@@ -119,7 +123,7 @@ the odds you see are the real odds.
   drop in their area.
 - **xG**: a distance curve fitted to typical values (about 0.42 from 11 m, 0.19 from
   16 m, 0.09 from 20 m, 0.035 from 25 m), scaled down for tight angles. It's then
-  scaled by finishing, pressure, header (×0.34) or foot, set piece, and how far the
+  scaled by finishing, pressure, header (×0.27) or foot, set piece, and how far the
   keeper is off his line. Blockers in the shot cone add a block chance.
 - **Offside** is certain when a player is more than 1.3 m off, and a probabilistic
   tight call within ±1.3 m. The preview shows "Offside risk X%".
@@ -141,22 +145,24 @@ the odds you see are the real odds.
 
 ## 4. How the CPU thinks
 
-- **Attack**: it generates about 60 to 90 candidate actions (passes to every
+- **Attack**: it generates about 25 to 50 valid candidate actions (passes to every
   teammate, through balls ahead of every runner, lofted passes and crosses into
-  three box zones, dribbles in 7 directions, and a shot). It scores each by
+  four box zones, dribbles in 9 directions, and a shot). It scores each by
   **expected value** over its outcomes, using a positional threat map (similar to
   xT). Keeping the ball in a dangerous spot is worth a lot, and losing it near your
   own goal costs a lot. Team style changes the weights: direct teams value progress,
   possession teams value safety. So does game state: a team trailing late takes more
   risk, and a team leading late protects the ball. It picks with a softmax, which
   gives variety. The temperature depends on difficulty.
-- **Defence**: it builds about 10 to 15 defensive plans (hold; press with the nearest
-  1 or 2; tackle with anyone in range; mark the most dangerous receivers; combos). It
+- **Defence**: it builds up to about 10 defensive plans (hold; press with the nearest
+  1 or 2; tackle with anyone in range; mark the 2 most dangerous receivers; press and
+  mark combined; the offside trap unless the line is deep). It
   applies each one hypothetically and asks the attack evaluator how good the
   attacker's best options would be. It picks the plan that minimises the attacker's
   soft-max expected value, counting tackle outcomes too. That way it presses when
-  pressing helps and marks the man you were about to find. Line height follows
-  style and game state.
+  pressing helps and marks the man you were about to find. Line height
+  follows style, except late on: deep when leading after 75', high when trailing after
+  70'.
 - **Hunting the ball**: when the opponent keeps the ball for several beats (and the
   CPU isn't winning), the CPU block pushes up and marks man to man, and press plans
   get a growing bonus. Sterile keep-ball can't safely run the clock down.
@@ -191,18 +197,53 @@ the odds you see are the real odds.
   the CPU. `tools/timing.js` estimates real-world match length. `tools/lines.js` compares
   deep, normal and high lines over whole matches. `test/*.test.js` uses
   `node:test`.
+- **Hosting:** the game is a static site. GitHub Pages serves it from the root of
+  `main` at https://snck.github.io/football/, so a push to `main` publishes it.
 - A seeded RNG (mulberry32) makes simulations reproducible.
 
-## 7. Other decisions
+## 7. Phones and tablets
 
-- **You are always the home side, attacking left to right.** There's no switching
-  ends, so the screen orientation never changes. The opponent's kit is always
+The engine, AI and commentary don't know about screens. All of this is in
+`render.js`, `game.js` and `style.css`.
+
+- **Held upright** (portrait, up to 900 px wide): the pitch stands vertically and you
+  attack up the screen, with the controls underneath. Geometry is drawn on a rotated
+  canvas, while players, badges and text are drawn unrotated so they stay readable. Taps are
+  mapped back through the rotation. `FB.VERTICAL_MQ` in `render.js` must match the
+  media query in `style.css`.
+- **Held sideways:** a compact version of the desktop layout.
+- **Minimum sizes:** player discs are at least 14 px across, and badges, labels and
+  banners have a floor too, because a phone shows only about 3.5 to 5 px per metre.
+- **Touch input** (`pointer: coarse`): a tap counts within 22 px of a player (12 px when
+  aiming a through ball, so space near a runner can still be picked). Tapping again
+  within 24 px commits. There's a Commit and a Cancel button, and hints say "tap"
+  instead of naming keys.
+- **No separate mobile build.** Desktop keeps its own layout and behaviour.
+
+## 8. Other decisions
+
+- **You are always the home side, attacking left to right** (or up the screen on an
+  upright phone). There's no switching ends, so the direction of play never changes. The opponent's kit is always
   distinguishable.
 - **No assets.** The pitch, players and effects are drawn on canvas. The crowd,
   whistle and kicks are synthesised with WebAudio. All names are invented from neutral
   first-name and surname pools.
-- **Compression is deliberate.** About 120 beats can't contain about 1,000 real
-  events. Stats are tuned to *look* right per match (scores 0–4, about 7–8 shots and
-  about 3.5 on target per side, 1.1 goals per side, possession 35–65%). Fouls (about
+- **Compression is deliberate.** About 105 beats can't contain about 1,000 real
+  events. Stats are tuned to *look* right per match (scores 0–5, about 8.5 shots and
+  about 4 on target per side, 1.2 goals per side, possession 30–70%). Fouls (about
   3) and corners (about 2) are lower than real football, because only decisive
   moments are modelled.
+
+## 9. Ideas not built yet
+
+Proposed after the mobile release. Counter-attacks and line height came from the same
+list and were built in devlog cycle 5.
+
+- **Teammate runs:** tell one teammate to run in behind, overlap or drop short, taking
+  effect on the next beat. The biggest change: it touches shape, the AI and the UI.
+- **Jockey, and a CPU that plans for dribbles:** stand off and slow a runner down
+  without lunging.
+- **Set-piece choices:** short, near-post or far-post corners; short or long goal kicks.
+- **Half-time changes:** one decision on formation or attitude.
+- **Pressing fatigue:** players who press or tackle a lot lose some pace late on.
+- **Penalty memory:** takers and keepers develop habits that can be read.

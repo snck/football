@@ -3,7 +3,8 @@
 Tools used for judging the game (all in the repo):
 `tools/sim.js` (CPU vs CPU stats), `tools/balance.js` (team round-robin),
 `tools/exploits.js` (scripted "human" strategies vs the CPU), `tools/timing.js`
-(real-time estimate), `npm test` (17 engine tests). I also drove the real UI in
+(real-time estimate), `tools/lines.js` (line heights, added in cycle 5), `npm test`
+(17 engine tests at first, 21 since cycle 5). I also drove the real UI in
 headless Chrome with Playwright from a scratch folder. That covered full matches from
 kickoff to full time, screenshots of every screen, and a hand-played session where I
 read each screenshot and chose each move myself (via a `?seed=` URL for
@@ -109,6 +110,28 @@ sequence is the experience I was aiming for: readable, risky, positional.
   counter identity (high risk appetite, fast forwards).
 - **Result:** team round-robin is now W18–23 for every club out of 60.
 
+## Mobile release (2026-11-23, between cycles 4 and 5)
+
+The desktop layout was unusable on a phone: the fixed 340 px sidebar left about 50 px
+for the pitch in portrait, players were about 5 px across, the tap radius was about
+11 px, and a double tap zoomed the page.
+
+- **Layouts:** an upright pitch with controls underneath in portrait, and a compact
+  desktop layout in landscape. Turning the phone mid-match switches at once.
+- **Readability:** minimum sizes for players, badges, labels, captions and banners.
+- **Touch:** fingertip-sized targets, tap-again or Commit to confirm, a new Cancel
+  button, and tap wording in hints and help. No double-tap zoom.
+- **Audio** resumes after an app switch or a phone lock.
+- The engine, AI and teams weren't touched, and the desktop pitch size and scale are
+  unchanged.
+
+**Tested:** iPhone 12 Pro and iPhone SE sizes, upright and sideways, in a preview
+browser. That browser has a mouse, so touch was faked for the script and the
+touch-only CSS was never triggered. **Not tested on a real phone.** On an iPhone SE held
+upright, the control panel scrolls a little when defending.
+
+**Publishing:** this version went out as a Claude Artifact. The code then went into git.
+
 ## Cycle 5: counter-attacks and a line height that matters
 
 Two weaknesses from the list below: a turnover simply ended the beat, and line height
@@ -117,16 +140,17 @@ whole matches, defending actively (CPU press/tackle/mark choices) or passively (
 shape), and reports goals, shot locations, through-ball success against, and where
 the ball is won.
 
-**Before** (`node tools/lines.js 120 1`, active defending):
+**Before** (800 matches per line: `node tools/lines.js 400 3` and `400 7` on the version
+before this cycle, active defending):
 
-| Line | GF | GA | Shots against in box | Through balls vs | Ball won at |
-|---|---|---|---|---|---|
-| Deep | 0.78 | 1.38 | 7.0 | 60% | 37 m |
-| Normal | 1.00 | 1.09 | 4.9 | 61% | 41 m |
-| High | 1.01 | 1.07 | 4.4 | 62% | 44 m |
+| Line | W-D-L | Points/match | GF | GA | Through balls vs | Corners against | Ball won at |
+|---|---|---|---|---|---|---|---|
+| Deep | 202-234-364 | 1.05 | 0.84 | 1.24 | 60–61% | 2.5 | 38 m |
+| Normal | 251-221-328 | 1.22 | 0.99 | 1.14 | 59–60% | 2.1 | 41 m |
+| High | 299-213-288 | 1.39 | 1.08 | 1.05 | 61–62% | 2.1 | 43 m |
 
-Deep was simply worse and High had no cost: through balls beat it no more often than
-they beat a deep line.
+Deep was simply worse and High had no cost: through balls beat it about as often as they
+beat a deep line.
 
 **Changes:**
 - **Counter-attack.** A tackle or interception by an outfield player lets the winner
@@ -151,34 +175,102 @@ they beat a deep line.
   1.16 to 1.64. New ratings: Harbour 76→78, Redmoor 74 (unchanged), Kestrel 76→77,
   Coldforge 78→77.
 
-**After** (`node tools/lines.js 400 3`, active defending):
+**After** (same seeds and match counts):
 
-| Line | W-D-L | GF | GA | xGA | Through balls vs | Corners against | Ball won at |
+| Line | W-D-L | Points/match | GF | GA | Through balls vs | Corners against | Ball won at |
 |---|---|---|---|---|---|---|---|
-| Deep | 140-98-162 | 1.01 | 1.06 | 1.03 | 54% | 2.6 | 38 m |
-| Normal | 148-88-164 | 1.15 | 1.21 | 1.19 | 61% | 2.3 | 40 m |
-| High | 163-93-144 | 1.47 | 1.40 | 1.35 | 67% | 2.5 | 42 m |
+| Deep | 271-203-326 | 1.27 | 0.98 | 1.04 | 54–55% | 2.8 | 38 m |
+| Normal | 281-188-331 | 1.29 | 1.12 | 1.21 | 61–62% | 2.4 | 40 m |
+| High | 319-198-283 | 1.44 | 1.48 | 1.36 | 67% | 2.4 | 42 m |
 
-Deep now means fewer goals both ways and High means more goals both ways. All three
-have similar records. The opposing CPU changes its line with the score late on, so it
-does a little better than any fixed line, which is how it should be. Passive
-"hold shape" is still poor on every line (GA 1.9–2.2). Active defending is still the
-main lever.
+- **Deep is fixed.** It's now level with Normal, with fewer goals at both ends.
+- **High now has a cost** (goals against 1.05 → 1.36) but scores more too, so **it's
+  still the strongest line**. Its lead over Normal is 0.16 points per match, about the
+  same as before (error about ±0.07).
+- Passive "hold shape" is still poor on every line (GA 1.9–2.2). Active defending is the
+  main lever.
 
-**Other effects** (300-match sim, 60-match exploit runs):
-- Goals per team rose from 1.10 to 1.21 and shots from 7.2 to 8.3. There are about 15
-  counters per match (both sides) and about 4 are declined.
+**Other effects:**
+- Goals per team rose from 1.10 to 1.21 and shots from 7.2 to 8.3 (sim 300, seed 11).
+  There are about 15 counters per match (both sides), about 4 more are declined, and the
+  counter move itself scores about 0.1 goals per match.
 - Match length is about 18.6 min (Normal) and 13.7 min (Short), up from 18 and 13.5.
-- Normal is a little harder. The greedy "thoughtful" script went from W40 D12 L8 to
-  W37 D7 L16, because CPU counters punish its intercepted passes.
-- Every scripted shortcut still loses more than it wins: dribble only W17 L22, always
-  tackle W15 L32, shoot on sight W19 L27, park the bus W7 L44.
-- Team balance (60 matches per pairing, seed 20000): 1.26 to 1.44 points per match,
-  with Kestrel at the bottom. The committed version was 1.25 to 1.52 on the same
-  seeds. The CPU-vs-CPU sim at 300 matches still favours Redmoor, so club balance
-  carries about ±0.1 points per match of uncertainty.
+- **Normal is not harder.** Over 300 matches the greedy "thoughtful" script went from
+  W159 D81 L60 to W178 D57 L65: fewer draws and slightly more points.
+- On Normal, every scripted shortcut still loses more than it wins (300 matches each,
+  below).
+- **Clubs: Redmoor is too strong.** Points per match over 1,410 matches per club (sim 300
+  seed 11, sim 600 seeds 21–23, `balance.js 60`), error about ±0.04:
+
+  | Club | Before (600 matches, sim seeds 11 and 21) | After |
+  |---|---|---|
+  | Redmoor | 1.44 | **1.55** |
+  | Kestrel | 1.38 | 1.33 |
+  | Harbour | 1.25 | 1.32 |
+  | Coldforge | 1.34 | 1.31 |
+
+  Redmoor was already the best club, and the new ratings didn't fix it. Its default high
+  line is a likely reason, since High is the strongest line, but that's untested.
+
+**Corrections (2026-11-25).** The first write-up of this cycle had these wrong:
+- It said all three lines had similar records and that the CPU did better than any fixed
+  line. High beats the CPU.
+- It compared before and after on different seeds and match counts (120 and 400).
+- It said Normal got harder because CPU counters punish intercepted passes. That came
+  from one 60-match run (L8 → L16) and the cause was never tested.
+- It said clubs were even to within ±0.1 points per match. The ratings had been tuned on
+  small samples, and the sim run that showed Redmoor ahead was played down.
+- **Lesson:** use at least 300 matches per cell, and check on seeds that weren't used for
+  tuning.
+
+## Release (2026-11-24)
+
+Pushed to https://github.com/snck/football and published with GitHub Pages at
+https://snck.github.io/football/ (from `main`, root folder). Checked the live page in a
+browser: all files load and a match starts with no errors. The Claude Artifact still has
+the mobile version without counters and line effects.
 
 ---
+
+## Current numbers (after cycle 5)
+
+`node tools/sim.js 300 11`, CPU vs CPU, Normal length:
+
+```
+beats/match 105.0 (min 92, max 117)
+goals/team 1.21  shots 8.3  onTarget 4.0  xG 1.19  conv 14.5%
+passes 57.5  pass% 68.1  corners 2.1  fouls 2.7  yellows 0.90  reds/match 0.173  offsides 0.63
+possession range 30–70%
+goals per team: 0:172 1:209 2:159 3:46 4:11 5:3
+top scores 1-1 0-1 2-0 0-2 2-1 1-0 1-2 2-2 0-0 3-1
+goal types: shot 540, header 162, penalty 14, free kick 8
+```
+
+`node tools/balance.js 60` (360 matches per club): Harbour W123 D93 L144 ·
+Redmoor W172 D80 L108 · Kestrel W123 D102 L135 · Coldforge W124 D81 L155.
+
+`node tools/exploits.js 300 normal` (scripted human vs CPU):
+
+```
+thoughtful (greedy EV)       W178 D 57 L 65
+careless (50% random)        W 11 D 40 L249
+random everything            W  0 D 15 L285
+shoot on sight               W 82 D 75 L143
+dribble only                 W 94 D 85 L121
+hoof it (clear/lob)          W 46 D 99 L155
+safest pass only             W  0 D145 L155
+park the bus (deep, hold)    W 38 D 49 L213
+always tackle/press          W 90 D 78 L132
+high line + trap always      W 69 D 65 L166
+```
+
+Difficulty ladder (thoughtful policy): Easy W47 D8 L5 and Hard W26 D12 L22 (60 each),
+Normal as above.
+
+`node tools/timing.js 40`: Normal 105 beats, 49 attacking + 49 first-time + 45 defensive
+decisions, **18.6 min**. `node tools/timing.js 40 short`: 78 beats, **13.7 min**.
+
+`npm test`: 21 passing.
 
 ## Final numbers (evidence, before cycle 5)
 
@@ -223,6 +315,9 @@ whistle with 0 page errors, plus forced penalties for and against.
 
 ## Definition of done: self-assessment
 
+Written after cycle 4; the numbers in it are from the section above. See "Current
+numbers" for the present build.
+
 - [x] **Full match with no bugs or dead ends.** Several full matches were played
   through the real UI (keyboard and mouse events) with zero page errors. That covered
   half-time, full time, goals with replay, and penalties both ways. A sim of 300+
@@ -257,23 +352,34 @@ whistle with 0 page errors, plus forced penalties for and against.
   were spotting a free winger, gambling on a first-time ball, and getting caught by
   the trap. Four distinct opponents, three difficulties and a rematch button help.
 
-## Known weaknesses I chose not to fix
+## Known weaknesses
+
+**Open, worth fixing:**
+
+- **Redmoor is too strong**, by about 0.2 points per match (cycle 5).
+- **High is still the strongest line**, by about 0.16 points per match (cycle 5).
+- **Easy rewards shortcuts.** Over 60 matches on Easy, five one-note scripts win clearly:
+  high line + trap (W42 L8), dribble only (W40 L3), always tackle (W35 L10), park the bus
+  (W28 L13) and shoot on sight (W25 L8).
+- **Never played on a real phone.** Touch was only simulated (see the mobile release).
+
+**Accepted:**
 
 - **The match-length figure is a model.** I couldn't watch a real first-time player.
   A very deliberate player could run past 20 minutes on Normal. Short exists for that.
-- **Compressed stats.** About 112 beats can't hold real football's event count. Shots
-  (≈7) and fouls (≈3) and corners (≈2) per side are below real-world levels. Pass
-  accuracy (≈67%) is low because ambitious through balls count as passes. I tuned for
+- **Compressed stats.** About 105 beats can't hold real football's event count. Shots
+  (≈8) and fouls (≈3) and corners (≈2) per side are below real-world levels. Pass
+  accuracy (≈68%) is low because ambitious through balls count as passes. I tuned for
   scorelines and shot quality, the things a player actually notices.
-- *(Fixed in cycle 5; kept for the record.)* **Defensive line height matters less than press, tackle and mark decisions.** Deep,
+- *(Mostly fixed in cycle 5; kept for the record.)* **Defensive line height matters less than press, tackle and mark decisions.** Deep,
   normal and high lines concede similar amounts when you defend passively. The real
   lever is your active choices, which is the right emphasis but means "park the bus"
   is a weak plan rather than a viable one.
-- **Dribble-heavy play is a legitimate, roughly break-even style** vs the CPU. It's a
-  little safer than its looks suggest because the CPU rarely commits lunges at a
-  runner. Not dominant, so I left it.
+- **Dribble-heavy play is a legitimate style** vs the CPU, though on Normal it now loses
+  a little more than it wins (W94 D85 L121). It's safer than its looks suggest because
+  the CPU rarely commits lunges at a runner. Not dominant on Normal, so I left it.
 - **No substitutions, fatigue or injuries.** These were cut by design (see DESIGN.md)
   to keep every beat about the ball.
-- **Headless testing only.** All visual checks were done through headless Chrome
-  screenshots. Audio (WebAudio synthesis) couldn't be heard in testing. It is
+- **Automated browser testing only.** All visual checks were done through headless Chrome
+  screenshots or a preview browser. Audio (WebAudio synthesis) couldn't be heard in testing. It is
   best-effort and fails silently.

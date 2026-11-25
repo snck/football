@@ -1,5 +1,7 @@
 # Touchline Tactics
 
+**Play it now: https://snck.github.io/football/**
+
 A turn-based, 11-a-side football game for the browser, on desktop, tablet or phone. You get unlimited time
 on every decision, but it still plays like a football match: build-up, pressing, line
 breaks, near misses, offside traps, stoppage-time drama.
@@ -23,6 +25,7 @@ npm test             # rules-engine tests (node:test)
 npm run sim          # 200 CPU-vs-CPU matches with aggregate stats
 npm run balance      # team round-robin
 npm run exploits     # scripted "human" strategies (spam shots, park the bus, keep-ball…) vs the CPU
+npm run lines        # compares deep, normal and high defensive lines
 node tools/timing.js # estimated real-world match length
 ```
 
@@ -70,7 +73,7 @@ CPU can counter you the same way, so a pass that gets cut out is costly.
 | `2` **Tackle** | Click one of your players inside the small ring to lunge now. Win / foul (card or penalty) / beaten odds are shown. |
 | `3` **Mark** | Click a dangerous opponent (the red rings are who the CPU most wants to find). Your nearest free player tight-marks him. Click your own player first to choose the marker. |
 | `T` | **Offside trap**: the back line steps up 4 m. |
-| `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. **Deep** protects the box: more shots blocked, more headers won, fewer balls in behind, but you win the ball back far from their goal. **High** squeezes midfield and wins it back higher (better counters), but your defenders have to turn and chase balls over the top. |
+| `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. **Deep** protects the box: more shots blocked, more headers won, fewer balls in behind, but you allow more shots from inside the box and win the ball back a little further from their goal. **High** squeezes midfield and wins it back higher (better counters), but your defenders have to turn and chase balls over the top. |
 
 `Enter` confirms the plan; `Space` just holds shape. You can combine one press *or*
 tackle with one mark and the trap.
@@ -103,7 +106,7 @@ Penalties are a mind game: pick left, centre or right as the taker or the keeper
 - **Teams:** four fictional clubs with different formations and styles (4-4-2
   balanced, 4-3-3 high press, 4-2-3-1 possession, 5-3-2 counter).
 - **Difficulty:** Easy, Normal or Hard.
-- **Length:** Short (~12 min) or Normal (~17 min). The real time depends on how long
+- **Length:** Short (~14 min) or Normal (~19 min). The real time depends on how long
   you think.
 
 ## Files

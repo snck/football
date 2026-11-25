@@ -44,7 +44,7 @@
       tp.appendChild(a); op.appendChild(b);
     });
     seg($('diffPick'), [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']], () => UI.opts.diff, (v) => { UI.opts.diff = v; });
-    seg($('lenPick'), [['short', 'Short ~12 min'], ['normal', 'Normal ~17 min']], () => UI.opts.len, (v) => { UI.opts.len = v; });
+    seg($('lenPick'), [['short', 'Short ~14 min'], ['normal', 'Normal ~19 min']], () => UI.opts.len, (v) => { UI.opts.len = v; });
     refreshMenu();
   }
   function refreshMenu() {
