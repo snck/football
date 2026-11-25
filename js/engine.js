@@ -31,7 +31,7 @@
     line: {
       deep: { react: -0.4, block: 1.6, ownThird: 1.6, midThird: 1, aerial: 0.25 },
       normal: { react: 0, block: 1, ownThird: 1, midThird: 1, aerial: 0 },
-      high: { react: 0.35, block: 0.85, ownThird: 1, midThird: 1.15, aerial: -0.1 },
+      high: { react: 0.5, block: 0.85, ownThird: 1, midThird: 1.15, aerial: -0.1 },
     },
   };
   const lineFx = (m, t) => TUNE.line[m.lines[t]] || TUNE.line.normal;

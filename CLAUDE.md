@@ -14,7 +14,8 @@ node --test --test-name-pattern="offside" test/engine.test.js     # tests matchi
 npm run dev                                                       # static server on :8080 (PORT to change); opening index.html directly also works
 
 node tools/sim.js 300 11              # CPU vs CPU stats: [matches] [seed]
-node tools/balance.js 60              # team round-robin: [matches per ordered pair]; seeds are fixed
+node tools/balance.js 1000 830000000 # team round-robin with 95% intervals, all cores: [matches per ordered pair] [seedBase, default 5000]
+node tools/mirror.js 16000 830000000 high normal # line v line, same club on both sides, all cores: [matches] [seedBase] [lineA] [lineB]
 node tools/exploits.js 300 normal     # scripted "human" strategies vs CPU: [matches per policy] [difficulty]; seeds are fixed
 node tools/lines.js 400 3             # deep/normal/high line comparison: [matches per cell] [seed]
 node tools/timing.js 40 short         # estimated real-world match length: [matches] [length]
@@ -22,7 +23,7 @@ node tools/diag.js 300 910000000      # goals by origin, action mix, shown vs ac
 node tools/policies.js 1000 950000000 # fixed habits vs the CPU on Normal, with 95% intervals: [matches] [seedBase] [name filter]
 ```
 
-The sims run at roughly 10 matches per second. `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
+The sims run at roughly 10 matches per second (about 70 on 12 cores for `balance.js` and `mirror.js`, which use worker threads through `tools/pool.js`). `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
 
 ## Architecture
 

@@ -11,8 +11,8 @@ when the cycle is done.
 | 0 | Branch, commit tools, baseline | **done** (`ecd0847`) |
 | 1a | Fixes with no balance effect (clear text, shot text, penalty mix) | **done** |
 | 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | **done** |
-| 2 | Re-tune Redmoor and the High line | todo, **next**, **needs numbers shown to the user before editing** |
-| 3 | A. Cover / jockey | todo |
+| 2 | Re-tune Redmoor and the High line | **done** (user approved react 0.5, Redmoor 73) |
+| 3 | A. Cover / jockey | todo, **next** |
 | 4 | B. Lasting marks, costlier trap | todo |
 | 5 | C. Teammate runs | todo |
 | 6 | D. Through balls (variety only; may be dropped after 3–5) | todo |
@@ -48,7 +48,10 @@ Standing rules:
 | 700000000+, 710000000+ | High-line tuning |
 | 910000000+ (300), 920000000+ (300), 930000000+ (400), 940000000+ (200) | analysis behind this plan |
 | 950000000+ (1000), lines 31 | baseline below |
-| **800000000+ unused** | reserved: High-line hold-out (phase 2) |
+| 720000000+ (16,000), 730000000+ (12,000), 725000000+ (1000 diag) | phase 2 tuning |
+| 800000000+ (32,000) | phase 2 High/Deep line hold-out |
+| 820000000+ (24,000) | phase 2 clubs hold-out |
+| sim 42, 43 | phase 2 |
 | 960000000+, 965000000+ (1000 each), 962000000+ (200) and 963000000+ (100) for the loose-ball fit, sim 41 | phase 1b |
 | **970…, 980…, 990… (×10⁶) unused** | reserved: phases 3, 4, 5 (first half tuning, +5,000,000 hold-out) |
 
@@ -117,7 +120,7 @@ Reading (95% interval of a difference between two rows is about ±0.11):
 
 `sim 300 11`, `exploits 300 normal`, `timing 40`: see DEVLOG "Current numbers". Engine tests: 21 passing.
 
-### After phase 1b: compare later phases with this, not with the table above
+### After phase 1b (superseded by the phase 2 column below)
 
 `node tools/policies.js 1000 965000000` (before = 1a, same seeds; every change is within the error of a difference, ±0.11):
 
@@ -141,6 +144,34 @@ always take a touch     0.93   0.97 ±0.07  GF 0.75 GA 1.25
 
 `node tools/diag.js 1000 965000000`: 2.51 goals/match (2.52 before); first-time chain 49.3% of goals, open play direct 27.5%,
 corner direct 16.0% (960000000: 2.52, 50.8%, 26.0%, 15.9%). Plans: press 24.9, press+mark 22.4, mark 18.9, tackle 15.8, trap 12.9, hold 5.1.
+
+### After phase 2: compare phases 3–5 with this
+
+`node tools/policies.js 1000 965000000`, same seeds as the 1b column:
+
+```
+baseline (CPU brain)       W357 D261 L382  pts 1.33 ±0.08  GF 1.23 GA 1.28
+hold shape always          W160 D204 L636  pts 0.68 ±0.07  GF 0.94 GA 1.94
+press nearest              W328 D227 L445  pts 1.21 ±0.08  GF 1.12 GA 1.30
+mark top threat            W189 D185 L626  pts 0.75 ±0.07  GF 0.95 GA 1.91
+press + mark               W338 D258 L404  pts 1.27 ±0.08  GF 1.15 GA 1.29
+press + trap               W375 D242 L383  pts 1.37 ±0.08  GF 1.18 GA 1.16
+press + mark + trap        W327 D251 L422  pts 1.23 ±0.08  GF 1.19 GA 1.32
+press + mark, high line    W326 D237 L437  pts 1.22 ±0.08  GF 1.29 GA 1.49
+greedy attack              W542 D229 L229  pts 1.85 ±0.08  GF 1.71 GA 1.03
+through ball first         W421 D223 L356  pts 1.49 ±0.08  GF 1.45 GA 1.32
+pass first                 W534 D207 L259  pts 1.81 ±0.08  GF 1.57 GA 1.02
+lob first                  W325 D254 L421  pts 1.23 ±0.08  GF 0.94 GA 1.15
+dribble first              W450 D246 L304  pts 1.60 ±0.08  GF 1.43 GA 1.12
+always take a touch        W246 D258 L496  pts 1.00 ±0.08  GF 0.79 GA 1.27
+```
+
+"press + trap" equals the CPU brain (1.26 before, at the edge of the error): watch it in phases 3 and 4.
+`node tools/diag.js 1000 965000000`: 2.47 goals/match; first-time chain 49.8% of goals, open play direct 28.7%, corner direct 15.0%.
+`exploits 300 normal` (W-D-L): thoughtful 175-64-61, shoot on sight 74-69-157, dribble only 73-100-127, hoof 39-76-185, safest pass
+0-153-147, park the bus 42-63-195, always tackle/press 74-80-146, high line + trap 68-57-175. `sim 300 11` 1.27 goals/team, `sim 1000 43`
+1.23, `timing 40` 18.4 min. `balance 60`: Harbour +0.047, Redmoor −0.011, Kestrel −0.047, Coldforge +0.011 (each ±0.14).
+`lines 400 3` active W-D-L: deep 148-118-134, normal 161-105-134, high 152-87-161.
 
 ---
 
@@ -359,3 +390,10 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   69-65-166 → 82-64-154, safest pass 0-144-156 → 0-155-145, thoughtful 177-57-66 → 162-69-69: every one-note script still loses more than it wins.
   Dribble success shown 66.9 → 68.9 (and as accurate). `timing 40` 18.6 → 18.5 min. Four tests added, 28 passing. Speed: about 16 → 10.5 matches/s
   with the machine quiet (`sim`), which is what phase 3's "half the sim speed" now means. Clear preview shows "Kept X%"; not checked in a browser (phase 8).
+- 2026-11-25: phase 2. User was shown the numbers and chose react 0.5 + Redmoor 73. Tables are in DEVLOG ("Cycle 6 (in progress)"). Hold-out: High −
+  Normal +0.035 ±0.029 (was +0.189 ±0.029), Deep − Normal −0.101 ±0.028 (unchanged code), every club within ±0.03 of the mean over 12,000
+  matches each. Redmoor 74 (no rating change) was also within the target but at its edge (+0.058 ±0.024). Trying Kestrel 78 as well was worse.
+  Added `tools/mirror.js` and `tools/pool.js` (worker threads); `balance.js` now takes a seed base, uses all cores and prints intervals (default
+  results are identical to the old tool). Only two constants changed in `js/`. Correction: the message to the user said the greedy script improved
+  (W162 L69 → W180 L58) "because balls behind Redmoor's line work more often". That cause was never tested and the change is within the error
+  (final build W175 L61); the user was told. 28 tests passing. Not checked in a browser (phase 8).

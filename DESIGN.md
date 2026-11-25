@@ -134,11 +134,15 @@ the odds you see are the real odds.
 
   | | Deep | Normal | High |
   |---|---|---|---|
-  | Head start (s) for outfield defenders chasing a through ball | +0.4 | 0 | −0.35 |
+  | Head start (s) for outfield defenders chasing a through ball | +0.4 | 0 | −0.5 |
   | Shot-block chance | ×1.6 | ×1 | ×0.85 |
   | Lane-interception reach, defenders in their own third | ×1.6 | ×1 | ×1 |
   | Lane-interception reach, defenders in the middle third | ×1 | ×1 | ×1.15 |
   | Head start (s) in aerial duels inside their own box | +0.25 | 0 | −0.1 |
+
+  Overall, High is level with Normal and Deep is slightly weaker. In mirror matches (same club on
+  both sides, CPU play) High takes 0.035 ±0.029 points per match more than Normal and Deep 0.10 ±0.03 fewer,
+  over 32,000 matches each.
 
 - **Loose balls** (misplaced passes, bad touches, heavy touches, clearances) go to whoever
   gets there first: distance over speed, plus some luck. `evaluate` estimates who that will
@@ -205,7 +209,8 @@ the odds you see are the real odds.
   rules and resolution. `js/ai.js` is the CPU. `js/commentary.js` holds the
   commentary. `js/render.js`, `js/audio.js` and `js/game.js` are the browser UI.
 - `tools/sim.js` runs headless CPU-vs-CPU batch simulations. `tools/balance.js`
-  runs a team round-robin. `tools/exploits.js` pits scripted human strategies against
+  runs a team round-robin, and `tools/mirror.js` one line against another with the same club on both
+  sides; both use every core and print 95% intervals. `tools/exploits.js` pits scripted human strategies against
   the CPU. `tools/timing.js` estimates real-world match length. `tools/lines.js` compares
   deep, normal and high lines over whole matches. `tools/diag.js` breaks matches down by
   mechanic (goals by origin, action mix, shown vs actual odds, loose balls, presses).

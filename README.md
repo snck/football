@@ -26,6 +26,7 @@ npm run sim          # 200 CPU-vs-CPU matches with aggregate stats
 npm run balance      # team round-robin
 npm run exploits     # scripted "human" strategies (spam shots, park the bus, keep-ball…) vs the CPU
 npm run lines        # compares deep, normal and high defensive lines
+node tools/mirror.js # one line against another, same club on both sides
 node tools/timing.js # estimated real-world match length
 ```
 
@@ -73,7 +74,7 @@ CPU can counter you the same way, so a pass that gets cut out is costly.
 | `2` **Tackle** | Click one of your players inside the small ring to lunge now. Win / foul (card or penalty) / beaten odds are shown. |
 | `3` **Mark** | Click a dangerous opponent (the red rings are who the CPU most wants to find). Your nearest free player tight-marks him. Click your own player first to choose the marker. |
 | `T` | **Offside trap**: the back line steps up 4 m. |
-| `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. **Deep** protects the box: more shots blocked, more headers won, fewer balls in behind, but you allow more shots from inside the box and win the ball back a little further from their goal. **High** squeezes midfield and wins it back higher (better counters), but your defenders have to turn and chase balls over the top. |
+| `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. **Deep** protects the box: more shots blocked, more headers won, fewer balls in behind, but you allow more shots from inside the box and win the ball back a little further from their goal. **High** squeezes midfield and wins it back higher (better counters), but your defenders have to turn and chase balls over the top. Overall, High and Normal are level and Deep is slightly weaker, so pick for the situation. |
 
 `Enter` confirms the plan; `Space` just holds shape. You can combine one press *or*
 tackle with one mark and the trap.

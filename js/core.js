@@ -94,7 +94,7 @@
     { id: 'harbour', name: 'Harbour City', short: 'HAR', formation: '4-4-2', colors: ['#1f4fa8', '#ffffff'],
       rating: 78, style: { risk: 0.5, press: 0.5, line: 'normal', cross: 0.5 }, blurb: 'Balanced 4-4-2. Solid, honest, good in the air.' },
     { id: 'redmoor', name: 'Redmoor Athletic', short: 'RED', formation: '4-3-3', colors: ['#c62828', '#fff3e0'],
-      rating: 74, style: { risk: 0.6, press: 0.75, line: 'high', cross: 0.35 }, blurb: 'High-pressing 4-3-3. Wins it high, plays fast.' },
+      rating: 73, style: { risk: 0.6, press: 0.75, line: 'high', cross: 0.35 }, blurb: 'High-pressing 4-3-3. Wins it high, plays fast.' },
     { id: 'kestrel', name: 'Kestrel Vale', short: 'KES', formation: '4-2-3-1', colors: ['#2e7d32', '#f1f8e9'],
       rating: 77, style: { risk: 0.35, press: 0.45, line: 'normal', cross: 0.3 }, blurb: 'Patient possession 4-2-3-1. Great passers.' },
     { id: 'coldforge', name: 'Coldforge United', short: 'COL', formation: '5-3-2', colors: ['#212121', '#ffb300'],

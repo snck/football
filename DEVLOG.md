@@ -232,6 +232,42 @@ the mobile version without counters and line effects.
 
 ---
 
+## Cycle 6 (in progress): High line and Redmoor re-tuned (2026-11-25)
+
+The rest of the cycle is logged in `PLAN.md` until it's finished. This part closes two known weaknesses from cycle 5.
+
+**High line.** `TUNE.line.high.react` (how much later defenders turn to chase a ball in behind) went from 0.35 to
+**0.5 s**. Points of High minus points of Normal per match, same club on both sides:
+
+| react | Tuning, `mirror.js 16000 720000000 high normal` | Hold-out, `mirror.js 32000 800000000 high normal` |
+|---|---|---|
+| 0.35 (before) | +0.172 ±0.041 | +0.189 ±0.029 |
+| 0.45 | +0.080 ±0.041 | not run |
+| **0.5** | +0.055 ±0.041 | **+0.035 ±0.029** |
+| 0.55 | −0.037 ±0.041 | −0.028 ±0.029 |
+
+Deep v Normal was left alone: −0.101 ±0.028 (`mirror.js 32000 800000000 deep normal`). `midThird`, tried first on
+the cycle 5 engine, couldn't close the gap by itself.
+
+**Redmoor.** More than half of its lead went with the line change, and its rating went from 74 to **73**. Points per match
+against the four-club mean:
+
+| | Before, `balance.js 1000 730000000` (±0.034) | 0.5, rating 74, `balance.js 2000 820000000` (±0.024) | **0.5, rating 73**, same hold-out (±0.024) |
+|---|---|---|---|
+| Harbour | −0.031 | −0.002 | +0.028 |
+| Redmoor | +0.135 | +0.058 | −0.028 |
+| Kestrel | −0.065 | −0.020 | −0.003 |
+| Coldforge | −0.039 | −0.036 | +0.002 |
+
+Also tried: Kestrel 77→78 on top (Kestrel +0.109, worse). Cycle 5 recorded 1.55 points for Redmoor; that wasn't reproduced (1.475 on
+12,000 matches of the cycle 5 engine, 1.512 just before this change).
+
+**Whole-game effect** (before → after, same seeds): `sim 300 11` goals/team 1.22 → 1.27; `sim 1000 43` after only, 1.23. No row of
+`exploits.js 300 normal` moved beyond its error, and every one-note script still loses more than it wins ("high line + trap" W82 D64
+L154 → W68 D57 L175). `policies.js 1000 965000000`: "press + mark, high line" 1.24 → 1.22, CPU brain 1.38 → 1.33, greedy 1.84 → 1.85 (each ±0.08);
+no row changed beyond its error (±0.11) except "press + trap", 1.26 → 1.37, right at it and equal to the CPU brain, which phase 4 of
+the plan is meant to price. Match length 18.5 → 18.4 min.
+
 ## Current numbers (after cycle 5)
 
 `node tools/sim.js 300 11`, CPU vs CPU, Normal length:
@@ -356,8 +392,6 @@ numbers" for the present build.
 
 **Open, worth fixing:**
 
-- **Redmoor is too strong**, by about 0.2 points per match (cycle 5).
-- **High is still the strongest line**, by about 0.16 points per match (cycle 5).
 - **Easy rewards shortcuts.** Over 60 matches on Easy, five one-note scripts win clearly:
   high line + trap (W42 L8), dribble only (W40 L3), always tackle (W35 L10), park the bus
   (W28 L13) and shoot on sight (W25 L8).
