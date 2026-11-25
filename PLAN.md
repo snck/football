@@ -12,8 +12,8 @@ when the cycle is done.
 | 1a | Fixes with no balance effect (clear text, shot text, penalty mix) | **done** |
 | 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | **done** |
 | 2 | Re-tune Redmoor and the High line | **done** (user approved react 0.5, Redmoor 73) |
-| 3 | A. Cover / jockey | **built; one target missed** (chain share): user to choose, see "Phase 3 result" |
-| 4 | B. Lasting marks, costlier trap | todo, **next** (after that choice) |
+| 3 | A. Cover / jockey | **done** (user dropped the chain-share target, see "Phase 3 result") |
+| 4 | B. Lasting marks, costlier trap | todo, **next** (user: don't start until told) |
 | 5 | C. Teammate runs | todo |
 | 6 | D. Through balls (variety only; may be dropped after 3–5) | todo |
 | 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo |
@@ -278,7 +278,7 @@ round the cover defender. Mutual exclusion in `defenseClick`, `commitDefense` wh
 **Tests.** Slide happens once, only after a completed pass, only up to 4 m; the next `evaluate` sees the new
 position; cleared on turnover; snapshot/restore round-trip; dribble odds vs cover sum to 1 with lower foul chance.
 
-**Accept** (hold-out, 1,000+ matches per cell): chain share of goals 35–44%; goals/team 1.10–1.35; CPU uses cover in
+**Accept** (hold-out, 1,000+ matches per cell): chain share of goals 35–44% (dropped by the user, see the result below); goals/team 1.10–1.35; CPU uses cover in
 10–35% of plans and no plan exceeds 40%; add "cover", "cover + mark", "cover + mark + trap" to
 `policies.js`, and every fixed habit sits at least 0.10 points below the CPU baseline (press + mark + trap
 included; if that one still ties, it's phase 4's job); one-note exploits still lose; timing Normal at most 19.5 min.
@@ -294,7 +294,7 @@ Built as specified except two things:
 
 | Target | Result (hold-out) | |
 |---|---|---|
-| Chain share 35–44% | **50.9 ±1.0%** with cover, 50.1 ±1.0% on the phase 2 engine (4,000 matches each, 976000000) | **missed** |
+| Chain share 35–44% | **50.9 ±1.0%** with cover, 50.1 ±1.0% on the phase 2 engine (4,000 matches each, 976000000) | missed, **target dropped** |
 | Goals/team 1.10–1.35 | 1.236 ±0.022 (1.265 ±0.022 before) | ok |
 | CPU uses cover 10–35%, no plan over 40% | 19.6%; biggest plan 17.7% | ok |
 | Every habit 0.10 below the CPU (1.37 ±0.04) | press nearest 1.18, press + trap **1.29**, press + mark + trap **1.27**, cover + mark + trap 1.11 (±0.04 each, 4,000 matches, 978000000); on 1,000 matches cover 0.98, cover + mark 1.03 | cover habits ok; press + trap 0.08 and press + mark + trap 0.10 below, so phase 4's job |
@@ -310,7 +310,10 @@ receiver is a median of 22 m from the covering player before the slide and 18 m 
 Letting the nearest defender slide instead, or the whole block slide, gave 46–48% of goals (1,000 matches each, ±2). Even a cover man who teleports to
 the receiver still left **44.8 ±2.0%**, so no one-defender slide gets to 35–44%.
 
-**Choice for the user (nothing changed for it):** keep Cover and drop the chain-share target, or act on the shot. Found on the way:
+These diagnostics ran on tuning seeds. The slide variants and the teleport used the discarded look-ahead CPU, which covered in 40–50% of plans;
+the final CPU covers in 20%, so it would move even less.
+
+**Decision (user, 2026-11-25):** keep Cover as it is and drop the chain-share target. First-time shots stay as they are. Found on the way, for reference:
 first-time *passes* cost 5% accuracy but first-time **shots carry no penalty at all**. Scaling only their chance (tuning seeds, 2,000 matches each):
 ×1 48.5% / 1.253 goals per team; ×0.85 46.7% / 1.176; ×0.7 41.3% / 1.078 (under the 1.10 floor). Not in the plan, not applied.
 
@@ -431,6 +434,8 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   (W162 L69 → W180 L58) "because balls behind Redmoor's line work more often". That cause was never tested and the change is within the error
   (final build W175 L61); the user was told. 28 tests passing. Not checked in a browser (phase 8).
 - 2026-11-25: phase 3, see "Phase 3 result" above. `policies.js` runs on all cores now (results match the old tool) and has the cover habits. Checked the new
-  UI by hand-driving headless Chrome from the scratchpad: desktop, 375×667 portrait and 667×375 landscape, no console errors, the four
-  mode buttons fit (the side panel scrolls by 25 px in portrait, 246 against 221). Click, key 4 and commit all deliver the order.
+  UI with a script driving headless Chrome from the scratchpad: desktop, 375×667 portrait and 667×375 landscape, no console errors, the four
+  mode buttons fit (the side panel scrolls by 25 px in portrait, 246 against 221). Click, key 4 (desktop) and commit deliver the order; switching between press, tackle and cover in one turn wasn't exercised (phase 8).
   DEVLOG entry waits for phase 8; DESIGN, README, how-to text and CLAUDE.md are current.
+- 2026-11-25: the user took the recommendation: Cover stays, the chain-share target is dropped, no change to first-time shots. They asked not to
+  start phase 4 yet. Documentation only, no game code changed.
