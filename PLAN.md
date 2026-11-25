@@ -13,7 +13,7 @@ when the cycle is done.
 | 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | **done** |
 | 2 | Re-tune Redmoor and the High line | **done** (user approved react 0.5, Redmoor 73) |
 | 3 | A. Cover / jockey | **done** (user dropped the chain-share target, see "Phase 3 result") |
-| 4 | B. Lasting marks, costlier trap | **built**; trap target met, mark target missed, user to decide (see "Phase 4 result") |
+| 4 | B. Lasting marks, costlier trap | **done** (mark target missed, user accepted it, see "Phase 4 result") |
 | 5 | C. Teammate runs | todo, **next** |
 | 6 | D. Through balls (variety only; may be dropped after 3–5) | todo |
 | 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo |
@@ -390,8 +390,8 @@ dribble only 90-88-122, hoof 39-96-165, safest pass 0-149-151, park the bus 39-5
 first-touch bonus +0.04. So it's the extra repositioning. These didn't remove it: moves of 4–6 m (+0.03 to +0.07), slower chasing of other runners (0.4 s +0.03, 0.8 s +0.06), reach for
 other balls halved. Each is ±0.045 to ±0.06, so they can't be ranked; the pick from tuning (+0.05) came out at +0.10 on the hold-out. `markMove` 0 also takes the CPU's mark away.
 
-**Open for the user.** Either accept it (re-marking the top threat each turn uses the threat rings, and it's 0.16 below the CPU), or change the rule so a *new* mark can't
-be combined with a press, tackle or cover (a standing one can). The second wasn't built or measured; "mark, then press" at 0.94 says a turn spent only on marking is expensive.
+**Decision (user, 2026-11-25):** accept marks as they are. Re-marking the top threat each turn uses the threat rings, and the habit is 0.16 below the CPU. The
+alternative, not letting a *new* mark be combined with a press, tackle or cover, was offered and not taken; it was never built or measured.
 
 ## Phase 5: C. Teammate runs
 
@@ -501,3 +501,4 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   (desktop, 375×667, 667×375): ordering a mark, seeing it stand, releasing it (key and button), hold shape delivering the release, trap, the CPU's mark text; no console errors.
   The row with the extra button first pushed Confirm off a portrait phone, so touch uses short labels while a mark stands (panel height 246 px again, as in phase 3).
   DEVLOG entry waits for phase 8; DESIGN, README, how-to text and CLAUDE.md are current.
+- 2026-11-25: the user accepted the mark result (press + a new mark every turn stays worth more than pressing alone). Phase 4 closed; documentation only, no game code changed.
