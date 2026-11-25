@@ -195,8 +195,10 @@ the odds you see are the real odds.
 - `tools/sim.js` runs headless CPU-vs-CPU batch simulations. `tools/balance.js`
   runs a team round-robin. `tools/exploits.js` pits scripted human strategies against
   the CPU. `tools/timing.js` estimates real-world match length. `tools/lines.js` compares
-  deep, normal and high lines over whole matches. `test/*.test.js` uses
-  `node:test`.
+  deep, normal and high lines over whole matches. `tools/diag.js` breaks matches down by
+  mechanic (goals by origin, action mix, shown vs actual odds, loose balls, presses).
+  `tools/policies.js` measures fixed habits against the CPU with confidence intervals.
+  `test/*.test.js` uses `node:test`.
 - **Hosting:** the game is a static site. GitHub Pages serves it from the root of
   `main` at https://snck.github.io/football/, so a push to `main` publishes it.
 - A seeded RNG (mulberry32) makes simulations reproducible.

@@ -18,6 +18,8 @@ node tools/balance.js 60              # team round-robin: [matches per ordered p
 node tools/exploits.js 300 normal     # scripted "human" strategies vs CPU: [matches per policy] [difficulty]; seeds are fixed
 node tools/lines.js 400 3             # deep/normal/high line comparison: [matches per cell] [seed]
 node tools/timing.js 40 short         # estimated real-world match length: [matches] [length]
+node tools/diag.js 300 910000000      # goals by origin, action mix, shown vs actual odds, loose balls, presses: [matches] [seedBase]
+node tools/policies.js 1000 950000000 # fixed habits vs the CPU on Normal, with 95% intervals: [matches] [seedBase] [name filter]
 ```
 
 The sims run at roughly 15 matches per second. `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
