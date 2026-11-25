@@ -134,6 +134,8 @@
     return TEMP.normal;
   }
 
+  const pickSide = (m, mix) => { const r = m.rng(); return r < mix.L ? 'L' : r < mix.L + mix.R ? 'R' : 'C'; };
+
   FB.AI = {
     V, candidates, scored, evOf, context,
     chooseAttack(m) {
@@ -230,8 +232,11 @@
       act._results = results;
       return act;
     },
-    choosePenalty(m) { const r = m.rng(); return r < 0.42 ? 'L' : r < 0.84 ? 'R' : 'C'; },
-    chooseDive(m) { const r = m.rng(); return r < 0.46 ? 'L' : r < 0.92 ? 'R' : 'C'; },
+    /** Equilibrium of FB.penaltyOdds (tested): against these no choice beats another, so there's no CPU habit to exploit. */
+    PEN_SHOT: { L: 0.368, C: 0.264, R: 0.368 },
+    PEN_DIVE: { L: 0.344, C: 0.312, R: 0.344 },
+    choosePenalty(m) { return pickSide(m, FB.AI.PEN_SHOT); },
+    chooseDive(m) { return pickSide(m, FB.AI.PEN_DIVE); },
     /** Threat each opponent poses as a receiver (for human defending UI). */
     threatMap(m) {
       const list = scored(m);

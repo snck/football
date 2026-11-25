@@ -53,7 +53,7 @@ eats more clock than quick play in the final third.
    - **Shoot**. The chance depends on distance, angle, pressure, blockers in the
      cone and the shooter's finishing. Shots can be blocked, saved and held, parried
      for a corner, parried into a rebound, or go wide.
-   - **Clear**: hoof it about 40 m upfield. Where it lands becomes a 50/50.
+   - **Clear**: hoof it about 40 m upfield. The opponent usually gets to it first.
 4. **Resolution (animated).** The ball and players move on the pitch, and the
    commentary and a "why" caption explain what happened and what the odds were.
 5. **Quick play (first-time).** After a *completed* pass, the receiver may act again
@@ -95,7 +95,8 @@ ball, and the attack when you have it. This keeps the pace up and the match insi
   offside from throw-ins, corners or goal kicks. The preview always flags it.
 - **Set pieces**: kick-off, throw-in, goal kick, corner (cross to any spot), free
   kick (direct shot with a wall if in range), and penalty (a mind game: the taker
-  picks left, centre or right and the keeper picks a dive. Nothing is timed).
+  picks left, centre or right and the keeper picks a dive, with the odds of each pairing
+  shown; the CPU plays an equilibrium mix, so no side is a reliable answer. Nothing is timed).
 - **Fouls and cards**: these come from tackles and dribble challenges. Yellow,
   second yellow becomes a red, and a straight red is possible for denying a clear
   chance (last man, in the final third). A sent-off player is not replaced.

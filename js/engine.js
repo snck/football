@@ -13,6 +13,7 @@
     reach0: 0.8, reachRate: 2.5, intBase: 0.7,
     passMax: 48, throughMax: 42, lobMax: 62, throwMax: 28,
     drTk: 0.36, drFoul: 0.22,
+    shotPressure: 0.22,    // share of the goal chance lost when shooting under full pressure
     cost: { pass: 34, through: 36, lob: 38, dribble: 31, shot: 34, tackle: 27, restart: 20, goal: 60, penalty: 50 },
     quickPenalty: 0.05, quickMax: 3, quickCost: 0.35,
     pressRange: 14, tackleRange: 5, pressMove: 7.5, markMove: 10,
@@ -632,7 +633,7 @@
     const base = FB.xgBase(r);
     const pr = o.pressure != null ? o.pressure : pressureOn(m, s, pos);
     const skill = o.header ? s.attrs.head : s.attrs.shoot;
-    let xg = base * (0.8 + 0.01 * (skill - 65)) * (1 - 0.22 * Math.min(1, pr));
+    let xg = base * (0.8 + 0.01 * (skill - 65)) * (1 - TUNE.shotPressure * Math.min(1, pr));
     if (o.header) xg *= 0.27;
     if (o.setPiece) xg *= 0.85;
     const gk = active(m, opp(t)).find((p) => p.role === 'GK');
@@ -1372,12 +1373,18 @@
   FB.penaltyOdds = function () {
     return { same: { L: 0.32, C: 0.15, R: 0.32 }, diff: { L: 0.88, C: 0.93, R: 0.88 } };
   };
+  /** Goal chance of the penalty about to be taken, for one shot/dive pair. */
+  FB.penaltyGoal = function (m, dir, dive) {
+    const c = carrierP(m);
+    const gk = active(m, opp(c.team)).find((p) => p.role === 'GK');
+    const odds = FB.penaltyOdds();
+    return (dir === dive ? odds.same[dir] : odds.diff[dir]) * (0.9 + (c.attrs.shoot - 70) * 0.004) * (gk ? 1 - (gk.attrs.gk - 72) * 0.004 : 1.1);
+  };
   FB.resolvePenalty = function (m, dir, dive) {
     const c = carrierP(m);
     const t = c.team;
     const gk = active(m, opp(t)).find((p) => p.role === 'GK');
-    const odds = FB.penaltyOdds();
-    const pGoal = (dir === dive ? odds.same[dir] : odds.diff[dir]) * (0.9 + (c.attrs.shoot - 70) * 0.004) * (gk ? 1 - (gk.attrs.gk - 72) * 0.004 : 1.1);
+    const pGoal = FB.penaltyGoal(m, dir, dive);
     const st = m.stats[t];
     st.shots++; st.xg += 0.76;
     m.cost = TUNE.cost.penalty;

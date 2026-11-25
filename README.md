@@ -99,7 +99,8 @@ keys. Held upright, a phone shows a vertical pitch with the controls underneath;
 it uses a compact version of the desktop layout. Sound starts when you tap Kick off, and iPhones
 play no sound while the ring/silent switch is on silent.
 
-Penalties are a mind game: pick left, centre or right as the taker or the keeper.
+Penalties are a mind game: pick left, centre or right as the taker or the keeper. The panel
+shows the chance of a goal for each combination, and the CPU has no favourite side to exploit.
 
 ### Options
 

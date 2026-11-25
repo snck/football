@@ -338,13 +338,13 @@
       head = 'Shoot!';
       big = pct(s.goal);
       lines.push(`Goal chance ${pct(s.goal)} · on target ${pct((1 - s.pBlock) * s.pOn)}`);
-      lines.push(`Angle/distance quality ${pct(s.base)}${s.pressure > 0.4 ? ` · ${prLabel(s.pressure)} (−${Math.round(30 * Math.min(1, s.pressure))}%)` : ''}`);
+      lines.push(`Angle/distance quality ${pct(s.base)}${s.pressure > 0.4 ? ` · ${prLabel(s.pressure)} (−${Math.round(100 * FB.TUNE.shotPressure * Math.min(1, s.pressure))}%)` : ''}`);
       lines.push(s.pBlock > 0.03 ? `Block risk ${pct(s.pBlock)} (${s.blockers.map((b) => nm(b.id)).join(', ')})` : 'Clear sight of goal');
       if (m.setPiece && m.setPiece.type === 'freekick') lines.push('Direct free kick: bend it over the wall');
     } else if (a.type === 'clear') {
       head = 'Clear it long';
-      big = '50/50';
-      lines.push('Hoofs the ball ~40 m upfield. Possession is up for grabs where it lands.');
+      big = 'Usually lost';
+      lines.push('Hoofs the ball ~40 m upfield, out of danger. The opponent usually gets to it first.');
       if (ev.charge.p > 0.02) lines.push(`Charge-down risk ${pct(ev.charge.p)}`);
     }
     const ln = lineNote(a, ev);
@@ -558,8 +558,8 @@
     const c = FB.carrier(m);
     $('penTitle').textContent = shooting ? 'PENALTY to you!' : 'PENALTY against you!';
     $('penText').textContent = shooting ? `${c.name} places the ball on the spot. Where will he put it? The keeper is guessing too.` : `${c.name} steps up. Which way will your keeper dive?`;
-    $('penOdds').textContent = shooting ? 'If the keeper guesses right, he saves about 2 in 3 to the corners. If he guesses wrong you almost always score. Down the middle is risky if he stays put.'
-      : 'Guess right and you save about 2 in 3. Guess wrong and it is almost always in. Staying central only stops penalties down the middle.';
+    const g = (dir, dive) => pct(FB.penaltyGoal(m, dir, dive));
+    $('penOdds').textContent = `Chance of a goal. Into a corner: ${g('L', 'L')} if the keeper guesses right, ${g('L', 'R')} if not. Down the middle: ${g('C', 'C')} if the keeper stays put, ${g('C', 'L')} if not.`;
     setPhase(shooting ? 'PENALTY — choose your side' : 'PENALTY — choose your dive', shooting ? 'attack' : 'defend');
     $('penalty').classList.remove('hidden');
     return new Promise((resolve) => {

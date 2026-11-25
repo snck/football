@@ -8,9 +8,9 @@ when the cycle is done.
 
 | Phase | What | State |
 |---|---|---|
-| 0 | Branch, commit tools, baseline | tools written and checked, baseline recorded below; not committed |
-| 1a | Fixes with no balance effect (clear text, shot text, penalty mix) | todo |
-| 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | todo |
+| 0 | Branch, commit tools, baseline | **done** (`ecd0847`) |
+| 1a | Fixes with no balance effect (clear text, shot text, penalty mix) | **done** |
+| 1b | Fixes that move balance (press penalty, loose balls, dribble skill) | todo, **next** |
 | 2 | Re-tune Redmoor and the High line | todo, **needs numbers shown to the user before editing** |
 | 3 | A. Cover / jockey | todo |
 | 4 | B. Lasting marks, costlier trap | todo |
@@ -153,7 +153,8 @@ Read: `engine.js` `looseBall`, `FB.evaluate`, top of `resolveAttackInner`; `ai.j
    `diag.js` assumed vs actual within 5 points for every row with n over 300. If the race can't get there, use
    per-case constants from the baseline. Probabilities must still sum to 1 (they don't change, only `keep`).
    Watch speed: it runs in every `evaluate`; sims should stay above about 10 matches/second.
-   Expect the CPU to become bolder; `outcomeValue` weights may need a small offset to hold goals/team.
+   Then show `looseKeep` in the clear preview
+   (`describeAction`, now a plain "Usually lost"). Expect the CPU to become bolder; `outcomeValue` weights may need a small offset to hold goals/team.
 3. **Dribble touch** (`engine.js:856`): add `- (c.attrs.dribble - 72) * 0.002`, keep the clamp.
 
 Check: `npm test`; `sim 300 11` + one fresh seed; `exploits 300 normal`; `diag`; `policies 1000` on 960000000
@@ -291,6 +292,9 @@ separately, keeping every "… first" habit at or below greedy:
    club that changes `evaluate` (e.g. long passer, aerial, dribbler).
 5. **Half-time choice:** one optional change on the half-time report: line/attitude or shape. CPU may change too.
 6. **Also worth a look:** Easy rewards shortcuts (DEVLOG known weaknesses); not agreed as work, so raise it only.
+7. **Penalty xG** (found in 1a, not agreed as work, raise it only): `resolvePenalty` credits a fixed 0.76 xG, but with the
+   mixes at equilibrium an average taker scores about 0.62 (0.688 × 0.9, the factor the engine applies). About 0.06
+   penalties per match, so it barely shows in the totals.
 
 ## Not doing
 
@@ -307,3 +311,10 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
 
 - 2026-11-25: analysis done, tools written, plan agreed. No game code changed. The 1,000-match baseline corrected two
   claims made to the user from 400 matches (marking adds nothing; through-first is an exploit); the user was told.
+- 2026-11-25: phases 0 and 1a. Mixes are `FB.AI.PEN_SHOT` / `PEN_DIVE`; `TUNE.shotPressure` = 0.22. One addition to the
+  spec: the old penalty help text was wrong ("saves about 2 in 3", "almost always score": really about 57% saved and
+  80% scored), so the panel now prints the four real chances from a new `FB.penaltyGoal(m, dir, dive)`, which
+  `resolvePenalty` also rolls. Three tests added, 24 passing. Before → after on the same seeds: `sim 300 11` goals/team 1.21 →
+  1.21, xG 1.19 → 1.20, penalties scored 14 → 11; `exploits 300 normal` moves by at most 5 results in any
+  row and every one-note script still loses more than it wins. No fresh seeds used. UI text checked by running the functions in
+  Node, not in a browser (that's in phase 8). The DEVLOG entry waits for phase 8.

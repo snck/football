@@ -169,6 +169,45 @@ test('penalty: guessing the right way saves far more often', () => {
   assert.ok(diff > same + 150, `same ${same} diff ${diff}`);
 });
 
+test('penalty: the CPU mixes leave a human taker or keeper nothing to exploit', () => {
+  const odds = FB.penaltyOdds(), D = ['L', 'C', 'R'];
+  const goal = (shot, dive) => (shot === dive ? odds.same[shot] : odds.diff[shot]);
+  const { PEN_SHOT: shot, PEN_DIVE: dive } = FB.AI;
+  for (const mix of [shot, dive]) assert.ok(Math.abs(mix.L + mix.C + mix.R - 1) < 1e-9);
+  const spread = (v) => Math.max(...v) - Math.min(...v);
+  const asTaker = D.map((s) => D.reduce((a, d) => a + dive[d] * goal(s, d), 0));
+  const asKeeper = D.map((d) => D.reduce((a, s) => a + shot[s] * goal(s, d), 0));
+  assert.ok(spread(asTaker) < 0.02, `taker ${asTaker}`);
+  assert.ok(spread(asKeeper) < 0.02, `keeper ${asKeeper}`);
+  const m = fresh(3), n = { choosePenalty: { L: 0, C: 0, R: 0 }, chooseDive: { L: 0, C: 0, R: 0 } };
+  for (const f in n) for (let i = 0; i < 4000; i++) n[f][FB.AI[f](m)]++;
+  for (const d of D) {
+    assert.ok(Math.abs(n.choosePenalty[d] / 4000 - shot[d]) < 0.03, `shot ${d}`);
+    assert.ok(Math.abs(n.chooseDive[d] / 4000 - dive[d]) < 0.03, `dive ${d}`);
+  }
+});
+
+test('penalty: the goal chance shown is the one rolled', () => {
+  for (const [s, d] of [['L', 'L'], ['L', 'R'], ['C', 'C'], ['C', 'L']]) {
+    let goals = 0, shown = 0;
+    for (let i = 0; i < 1500; i++) {
+      const m = fresh(5000 + i); m.restart = { type: 'penalty', team: 0, pos: { x: 94, y: 34 } }; FB.startBeat(m);
+      shown += FB.penaltyGoal(m, s, d);
+      if (FB.resolvePenalty(m, s, d).result === 'goal') goals++;
+    }
+    assert.ok(Math.abs(goals - shown) / 1500 < 0.04, `${s}/${d}: ${goals} vs ${shown}`);
+  }
+});
+
+test('shot pressure costs the share of the goal chance the preview quotes', () => {
+  const m = fresh(); clearPitch(m); give(m, 9, 88, 34);
+  Object.assign(m.players[11], { x: 104, y: 34 }); // keeper on his line
+  const s = m.players[9];
+  const at = (pressure) => FB.shotModel(m, s, s, { pressure }).xg;
+  assert.ok(Math.abs(at(1) / at(0) - (1 - FB.TUNE.shotPressure)) < 1e-9);
+  assert.ok(Math.abs(at(0.5) / at(0) - (1 - FB.TUNE.shotPressure / 2)) < 1e-9);
+});
+
 test('quick play: allowed after a completed pass, never allows dribbling', () => {
   const m = fresh(11);
   clearPitch(m);
