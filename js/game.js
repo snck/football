@@ -20,7 +20,7 @@
   };
 
   const UI = {
-    m: null, R: null, wait: null, mode: 'pass', sel: null, hover: null, hoverPt: null, plan: {}, markFrom: null, run: null, runKind: null,
+    m: null, R: null, wait: null, mode: 'pass', shotKind: 'placed', sel: null, hover: null, hoverPt: null, plan: {}, markFrom: null, run: null, runKind: null,
     phase: 'menu', quick: false, feedIdx: 0, badges: null, threat: null, rec: [], cur: null, started: 0,
     opts: { team: store.get('team', 0), opp: store.get('opp', 1), diff: store.get('diff', 'normal'), len: store.get('len', 'normal') },
     speed: store.get('speed', 1), sound: store.get('sound', true), paused: false,
@@ -209,6 +209,7 @@
     if (!allowed[UI.mode] && UI.mode !== 'clear') UI.mode = 'pass';
     if (UI.mode === 'shoot' && !allowed.shoot) UI.mode = 'pass';
     if (UI.mode === 'dribble' && !allowed.dribble) UI.mode = 'pass';
+    if (!allowed.shoot || !FB.shotKinds(m).includes(UI.shotKind)) UI.shotKind = 'placed';
     const c = FB.carrier(m);
     const counter = quick && FB.isCounter(m);
     setPhase(counter ? `⚡ COUNTER-ATTACK — ${c.name}` : quick ? `⚡ FIRST-TIME CHANCE — ${c.name}` : `YOUR BALL — ${c.name} (#${c.num})`, 'attack');
@@ -283,10 +284,15 @@
     const m = UI.m;
     const allowed = FB.allowedActions(m);
     if (k !== 'clear' && !allowed[k]) return;
+    if (k === 'shoot' && UI.mode === 'shoot' && !silent) { // pressing Shoot again tries the next kind of shot
+      const ks = FB.shotKinds(m);
+      UI.shotKind = ks[(ks.indexOf(UI.shotKind) + 1) % ks.length];
+    }
     UI.mode = k; UI.sel = null;
     [...$('modes').children].forEach((b) => b.classList.toggle('on', b.dataset.mode === k));
     computeBadges();
-    if (k === 'shoot' || k === 'clear') UI.sel = { type: k };
+    if (k === 'shoot') UI.sel = shotAction();
+    if (k === 'clear') UI.sel = { type: k };
     refreshPreview();
     if (!silent) window.Sound.play('click');
   }
@@ -326,10 +332,27 @@
         const k = d > max ? max / d : 1;
         return { type: 'dribble', target: clampPt({ x: c.x + (pt.x - c.x) * k, y: c.y + (pt.y - c.y) * k }) };
       }
-      case 'shoot': return { type: 'shoot' };
+      case 'shoot': return shotAction();
       case 'clear': return { type: 'clear' };
     }
     return null;
+  }
+  const shotAction = () => (UI.shotKind === 'placed' ? { type: 'shoot' } : { type: 'shoot', kind: UI.shotKind });
+  const SHOT_NAME = { placed: 'Placed', driven: 'Driven', chip: 'Chip' };
+  /** Pick the kind of shot (from the buttons in the preview). */
+  function setShotKind(k) {
+    if (!UI.wait || UI.wait.kind !== 'attack' || UI.mode !== 'shoot' || !FB.shotKinds(UI.m).includes(k)) return;
+    UI.shotKind = k; UI.sel = shotAction();
+    refreshPreview();
+    window.Sound.play('click');
+  }
+  /** The three kinds of shot with their goal chances, as buttons. */
+  function shotRow() {
+    const m = UI.m, ks = FB.shotKinds(m);
+    return `<div class="seg shotSeg">${FB.TUNE.shotKinds.map((k) => {
+      const ok = ks.includes(k), ev = ok ? FB.evaluate(m, k === 'placed' ? { type: 'shoot' } : { type: 'shoot', kind: k }) : null;
+      return `<button data-kind="${k}" class="${k === UI.shotKind ? 'on' : ''}"${ok ? '' : ' disabled title="The keeper is on his line"'}>${SHOT_NAME[k]} ${ok ? pct(ev.p) : '–'}</button>`;
+    }).join('')}</div>`;
   }
   const clampPt = (p) => ({ x: Math.max(0.6, Math.min(L - 0.6, p.x)), y: Math.max(0.6, Math.min(W - 0.6, p.y)) });
 
@@ -350,7 +373,7 @@
     const m = UI.m;
     if (!ev.valid) return `<div class="lbl">${labelOf(a)}</div><div class="risk-vhigh">${ev.reason}</div>`;
     const lines = [];
-    let head = '', big = '';
+    let head = '', big = '', pre = '';
     const off = ev.offP || 0;
     if (a.type === 'pass') {
       head = `Pass to ${nm(a.to)} · ${Math.round(ev.d)} m`;
@@ -384,9 +407,12 @@
       if (ev.pFoul > 0.02) lines.push(`Win a free kick: ${pct(ev.pFoul)}${FB.inOppBox(FB.rel(HUMAN, ev.target)) ? ' — PENALTY if fouled in the box!' : ''}`);
     } else if (a.type === 'shoot') {
       const s = ev.shot;
-      head = 'Shoot!';
+      head = `${SHOT_NAME[ev.kind]} shot · ${Math.round(s.dGoal)} m`;
       big = pct(s.goal);
+      pre = shotRow();
       lines.push(`Goal chance ${pct(s.goal)} · on target ${pct((1 - s.pBlock) * s.pOn)}`);
+      if (ev.kind === 'driven') lines.push(`Struck hard: ${s.dGoal > FB.TUNE.shot.driven.from ? 'power helps from this range' : 'too close for power to help'}, but more get blocked, fewer hit the target, and the keeper holds only ${pct(s.held)} of saves`);
+      if (ev.kind === 'chip') lines.push(`Their keeper is ${Math.round(s.keeperOff)} m off his line: lifted over him and over the blockers. Rarely saved, often too high`);
       lines.push(`Angle/distance quality ${pct(s.base)}${s.pressure > 0.4 ? ` · ${prLabel(s.pressure)} (−${Math.round(100 * FB.TUNE.shotPressure * Math.min(1, s.pressure))}%)` : ''}`);
       lines.push(s.pBlock > 0.03 ? `Block risk ${pct(s.pBlock)} (${s.blockers.map((b) => nm(b.id)).join(', ')})` : 'Clear sight of goal');
       if (m.setPiece && m.setPiece.type === 'freekick') lines.push('Direct free kick: bend it over the wall');
@@ -409,7 +435,7 @@
     const pv = a.type === 'shoot' ? ev.shot.goal * 2.2 : a.type === 'clear' ? 0.5 : ev.p;
     const label = a.type === 'shoot' ? (ev.shot.goal > 0.3 ? 'Big chance' : ev.shot.goal > 0.12 ? 'Decent chance' : ev.shot.goal > 0.05 ? 'Half chance' : 'Speculative') : a.type === 'clear' ? 'Safety first' : riskWord(ev.p);
     const failTxt = { pass: 'If it fails: turnover where it is cut out.', through: 'If it fails: they win it and can counter.', lob: ev.header ? 'If it fails: cleared, maybe a corner.' : 'If it fails: they win the header.', dribble: 'If it fails: dispossessed, and you are out of position.', shoot: 'If it misses: goal kick, a corner or a rebound.', clear: '' }[a.type];
-    return `<div class="lbl">${head}</div><div><span class="big ${riskClass(pv)}">${big}</span> <span class="${riskClass(pv)}">${label}</span></div><ul>${lines.map((l) => `<li>${l}</li>`).join('')}</ul>${failTxt ? `<div class="muted">${failTxt}</div>` : ''}`;
+    return `<div class="lbl">${head}</div><div><span class="big ${riskClass(pv)}">${big}</span> <span class="${riskClass(pv)}">${label}</span></div>${pre}<ul>${lines.map((l) => `<li>${l}</li>`).join('')}</ul>${failTxt ? `<div class="muted">${failTxt}</div>` : ''}`;
   }
   /** One line on how the defending side's line height changes these odds (null when it doesn't). */
   function lineNote(a, ev) {
@@ -429,7 +455,7 @@
     }
     return null;
   }
-  function labelOf(a) { return { pass: 'Pass', through: 'Through ball', lob: 'Lofted ball', dribble: 'Dribble', shoot: 'Shot', clear: 'Clear' }[a.type] || a.type; }
+  function labelOf(a) { return a.type === 'shoot' && a.kind ? `${SHOT_NAME[a.kind]} shot` : { pass: 'Pass', through: 'Through ball', lob: 'Lofted ball', dribble: 'Dribble', shoot: 'Shot', clear: 'Clear' }[a.type] || a.type; }
 
   function refreshPreview() {
     const m = UI.m;
@@ -455,7 +481,7 @@
       through: `${v} ${tx('space', 'the space')} ahead of a teammate. They will run onto it. Watch the offside line.`,
       lob: `${v} a teammate or a spot. Aim into the box from wide to cross.`,
       dribble: `${v} inside the ring to carry the ball. Ringed defenders may challenge.`,
-      shoot: 'Shoot from here.',
+      shoot: tx('Shoot from here. Press 5 again for the next kind of shot: placed, driven, or a chip over a keeper off his line.', 'Shoot from here. Pick placed, driven, or a chip over a keeper off his line.'),
       clear: 'Launch it upfield.',
     }[k];
   }
@@ -971,7 +997,7 @@
     const id = nearestPlayer(pt, pickRadius());
     if (UI.wait.kind === 'attack') {
       if (UI.runKind) { pickRunner(id); return; }
-      if (UI.mode === 'shoot' || UI.mode === 'clear') { commitAttack({ type: UI.mode }); return; }
+      if (UI.mode === 'shoot' || UI.mode === 'clear') { commitAttack(UI.mode === 'shoot' ? shotAction() : { type: UI.mode }); return; }
       const a = candidateAt(pt, id);
       if (!a) return;
       if (UI.sel && sameAction(UI.sel, a)) { commitAttack(UI.sel); return; }
@@ -1058,6 +1084,7 @@
     const c = $('pitch');
     c.addEventListener('mousemove', onMove);
     c.addEventListener('click', onClick);
+    $('preview').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button[data-kind]'); if (b) setShotKind(b.dataset.kind); });
     c.addEventListener('mouseleave', () => { UI.hover = null; UI.hoverPt = null; UI.R.hover = null; if (UI.phase === 'attack' && !UI.sel) refreshPreview(); });
     window.addEventListener('keydown', onKey);
     $('btnStart').onclick = startMatch;

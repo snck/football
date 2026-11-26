@@ -57,6 +57,8 @@ main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
 .preview .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
 .preview ul { margin: 4px 0 0; padding-left: 16px; }
 .preview li { margin: 2px 0; }
+.preview .shotSeg { margin: 6px 0 2px; }
+.preview .shotSeg button { padding: 3px 8px; font-size: 12px; }
 .risk-low { color: var(--good); } .risk-mid { color: var(--mid); } .risk-high { color: #ff8a65; } .risk-vhigh { color: var(--bad); }
 #actions { display: flex; gap: 6px; }
 #actions button { flex: 1; padding: 8px; }

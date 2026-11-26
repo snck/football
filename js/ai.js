@@ -34,7 +34,7 @@
       case 'clear': return -0.02 * ctx.lossW;
       case 'offside': return -loss(t, o.pos) * 0.6 * ctx.lossW;
       case 'goal': return 1;
-      case 'saved': return 0.02;
+      case 'saved': return 0.012 + 0.04 * (o.rebound != null ? o.rebound : 0.2); // a save that falls loose can be followed up
       case 'wide': return -0.008;
       case 'blocked': return 0.012;
       case 'foulFor': return FB.inOppBox(rel(t, o.pos)) ? 0.7 : V(t, o.pos) * 1.2 + 0.01;
@@ -93,7 +93,7 @@
         out.push({ type: 'dribble', target: abs(t, T) });
       }
     }
-    if (allowed.shoot) out.push({ type: 'shoot' });
+    if (allowed.shoot) for (const kind of FB.shotKinds(m)) out.push(kind === 'placed' ? { type: 'shoot' } : { type: 'shoot', kind });
     if (cr.x < 45) out.push({ type: 'clear' });
     return out;
   }
@@ -108,6 +108,9 @@
       list.push({ a, ev, v: evOf(m, a, ev, ctx) });
     }
     list.sort((x, y) => y.v - x.v);
+    // only the best kind of shot stays: three near-equal shots would otherwise get three shares of the soft pick
+    let shot = false;
+    for (let i = 0; i < list.length; i++) if (list[i].a.type === 'shoot') { if (shot) list.splice(i--, 1); shot = true; }
     void temp;
     return list;
   }

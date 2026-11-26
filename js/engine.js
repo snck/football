@@ -14,6 +14,17 @@
     passMax: 48, throughMax: 42, lobMax: 62, throwMax: 28,
     drTk: 0.36, drFoul: 0.22,
     shotPressure: 0.22,    // share of the goal chance lost when shooting under full pressure
+    // Shot kinds. Placed is the plain shot. Driven: goal chance × (1 + range × (metres from goal − from)), kept within
+    // [min, max]; block chance × block, on-target chance − onTarget. Chip: only over a keeper more than `off` m off his line;
+    // goal chance × (base + perM × (metres he is off − off)), up to max, in place of the plain shot's bonus for a keeper
+    // off his line; block chance × block; on target = goal chance + saves. save = [held, pushed out for a corner] share of
+    // saves, the rest fall loose in the box.
+    shot: {
+      placed: { save: [0.52, 0.28] },
+      driven: { from: 18, range: 0.025, min: 0.8, max: 1.35, block: 1.4, onTarget: 0.06, save: [0.36, 0.34] },
+      chip: { off: 4, base: 0.4, perM: 0.15, max: 2.2, block: 0.3, saves: 0.1, save: [0.7, 0.15] },
+    },
+    shotKinds: ['placed', 'driven', 'chip'],
     cost: { pass: 34, through: 36, lob: 38, dribble: 31, shot: 34, tackle: 27, restart: 20, goal: 60, penalty: 50 },
     quickPenalty: 0.05, quickMax: 3, quickCost: 0.35,
     // A short pass to feet (at most `softPass.max` m, receiver under `softPass.pressure`) sets up the next first-time
@@ -774,16 +785,20 @@
     const base = FB.xgBase(r);
     const pr = o.pressure != null ? o.pressure : pressureOn(m, s, pos);
     const skill = o.header ? s.attrs.head : s.attrs.shoot;
+    const kind = o.header ? 'header' : o.kind || 'placed';
+    const K = TUNE.shot[kind] || TUNE.shot.placed;
     let xg = base * (0.8 + 0.01 * (skill - 65)) * (1 - TUNE.shotPressure * Math.min(1, pr));
     if (o.header) xg *= 0.27;
     if (o.setPiece) xg *= 0.85;
+    const dGoal = Math.hypot(L - r.x, 34 - r.y);
+    if (kind === 'driven') xg *= clamp(1 + K.range * (dGoal - K.from), K.min, K.max);
     const gk = active(m, opp(t)).find((p) => p.role === 'GK');
+    const off = gk ? keeperOff(gk, t) : 0;
     if (gk) {
       xg *= 1 - (gk.attrs.gk - 72) * 0.008;
+      if (kind === 'chip') xg *= Math.min(K.max, K.base + K.perM * (off - K.off));
       // keeper off his line → lob/empty-net bonus
-      const gr = rel(t, gk);
-      const off = Math.hypot(L - gr.x, 34 - gr.y);
-      if (off > 7) xg = Math.min(0.9, xg * (1 + (off - 7) * 0.08));
+      else if (off > 7) xg = Math.min(0.9, xg * (1 + (off - 7) * 0.08));
     } else xg = Math.min(0.95, xg * 2.5);
     xg = clamp(xg, 0.003, 0.9);
     // blockers
@@ -800,15 +815,30 @@
         if (sd.d > width) continue;
         let pb = 0.3 * (1 - sd.d / width) * (along < 3 ? 1 : 3 / along * 0.6 + 0.4);
         if (o.setPiece) pb *= 0.35; else pb *= lineBlock;
+        if (K.block) pb = Math.min(0.6, pb * K.block);
         blockers.push({ id: d.id, p: pb });
         keep *= 1 - pb;
       }
     }
     const pBlock = Math.min(0.5, 1 - keep);
-    const pOn = clamp(0.27 + 1.35 * xg + 0.003 * (skill - 65), xg + 0.05, 0.93);
-    return { xg, pBlock, pOn, blockers, base, pressure: pr, goal: (1 - pBlock) * xg, lineBlock };
+    let pOn = clamp(0.27 + 1.35 * xg + 0.003 * (skill - 65), xg + 0.05, 0.93);
+    if (kind === 'driven') pOn = clamp(pOn - K.onTarget, xg + 0.03, 0.93);
+    else if (kind === 'chip') pOn = Math.min(0.93, xg + K.saves);
+    const save = (K.save || TUNE.shot.placed.save);
+    return { xg, pBlock, pOn, blockers, base, pressure: pr, goal: (1 - pBlock) * xg, lineBlock, kind, keeperOff: off, dGoal,
+      held: save[0], pushed: save[1], rebound: 1 - save[0] - save[1] };
   }
   FB.shotModel = shotModel;
+  /** How far (m) a keeper stands off his line, from the middle of his goal. */
+  function keeperOff(gk, atkTeam) { const gr = rel(atkTeam, gk); return Math.hypot(L - gr.x, 34 - gr.y); }
+  /** Which shot kinds the carrier can try now (null when he can't shoot). A chip needs the keeper off his line. */
+  FB.shotKinds = function (m) {
+    if (!FB.allowedActions(m).shoot) return null;
+    const c = carrierP(m);
+    const gk = active(m, opp(c.team)).find((p) => p.role === 'GK');
+    const chip = !!gk && !m.setPiece && keeperOff(gk, c.team) > TUNE.shot.chip.off;
+    return TUNE.shotKinds.filter((k) => k !== 'chip' || chip);
+  };
 
   const pct = (p) => `${Math.round(p * 100)}%`;
   FB.pct = pct;
@@ -1092,14 +1122,16 @@
     }
     if (a.type === 'shoot') {
       if (!allowed.shoot) return { valid: false, reason: 'Too far to shoot' };
-      const s = shotModel(m, c, c, { setPiece: sp === 'freekick' });
+      const kind = a.kind || 'placed';
+      if (!FB.shotKinds(m).includes(kind)) return { valid: false, reason: kind === 'chip' ? 'The keeper is on his line: no room to chip him' : 'Unknown kind of shot' };
+      const s = shotModel(m, c, c, { setPiece: sp === 'freekick', kind });
       const outcomes = [
         { p: s.goal, k: 'goal' },
-        { p: (1 - s.pBlock) * (s.pOn - s.xg), k: 'saved' },
+        { p: (1 - s.pBlock) * (s.pOn - s.xg), k: 'saved', rebound: s.rebound },
         { p: (1 - s.pBlock) * (1 - s.pOn), k: 'wide' },
         { p: s.pBlock, k: 'blocked', pos: c },
       ];
-      return { valid: true, type: 'shoot', p: s.goal, shot: s, outcomes, threats: s.blockers.map((b) => b.id) };
+      return { valid: true, type: 'shoot', kind, p: s.goal, shot: s, outcomes, threats: s.blockers.map((b) => b.id) };
     }
     return { valid: false, reason: 'Unknown action' };
   };
@@ -1239,7 +1271,7 @@
     const st = m.stats[t];
     st.shots++; st.xg += model.goal;
     momentum(m, t, 0.06 + model.xg * 0.3);
-    say(m, opts.header ? 'header' : 'shot', { a: ctxP(s), b: ctxP(s), team: t }, 'shot');
+    say(m, opts.header ? 'header' : model.kind === 'driven' ? 'shotDriven' : model.kind === 'chip' ? 'shotChip' : 'shot', { a: ctxP(s), b: ctxP(s), team: t }, 'shot');
     const gk = active(m, opp(t)).find((p) => p.role === 'GK');
     const r = m.rng();
     const g = abs(t, { x: L, y: 34 });
@@ -1273,7 +1305,7 @@
       if (dive) { step.moves[gk.id] = dive; gk.x = dive.x; gk.y = dive.y; }
       tl.push(step);
       m.ball = { x: aimIn.x, y: aimIn.y };
-      goalScored(m, s, tl, opts.header ? 'header' : opts.setPiece ? 'free kick' : 'shot');
+      goalScored(m, s, tl, opts.header ? 'header' : opts.setPiece ? 'free kick' : model.kind === 'chip' ? 'chip' : 'shot');
       return 'goal';
     }
     if (r2 < model.pOn) {
@@ -1286,10 +1318,10 @@
       tl.push(step);
       momentum(m, t, 0.05);
       const r3 = m.rng();
-      if (!gk || r3 < 0.52) {
+      if (!gk || r3 < model.held) {
         say(m, 'saved', { c: ctxP(gk), team: opp(t) }, 'save');
         if (gk) { m.restart = { type: 'goalkick', team: gk.team, pos: { x: gk.x, y: gk.y } }; m.carrier = null; m.ball = { x: gk.x, y: gk.y }; }
-      } else if (r3 < 0.8) {
+      } else if (r3 < model.held + model.pushed) {
         say(m, 'parried', { c: ctxP(gk), team: opp(t) }, 'save');
         const out = abs(t, { x: L + 1, y: aimY < 34 ? 28 : 40 });
         tl.push({ dur: 0.4, ball: { x: out.x, y: out.y, arc: 0.5 }, owner: null });

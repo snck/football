@@ -112,6 +112,52 @@ test('shot quality falls with distance and with blockers in the cone', () => {
   assert.equal(FB.evaluate(m, { type: 'shoot' }).valid, false);
 });
 
+test('shot kinds: placed is the plain shot; driven pays from range, chip only over a keeper off his line; all sum to 1', () => {
+  const m = fresh(6);
+  clearPitch(m);
+  const gk = m.players[11];
+  const keeperAt = (x) => { gk.x = x; gk.y = 34; };
+  keeperAt(103.5);
+  give(m, 9, 77, 30); // about 28 m out, clear sight
+  assert.deepEqual(FB.evaluate(m, { type: 'shoot', kind: 'placed' }), Object.assign(FB.evaluate(m, { type: 'shoot' }), { kind: 'placed' }));
+  assert.deepEqual(FB.shotKinds(m), ['placed', 'driven']);
+  assert.equal(FB.evaluate(m, { type: 'shoot', kind: 'chip' }).valid, false);
+  for (const kind of ['placed', 'driven']) assert.ok(Math.abs(sumP(FB.evaluate(m, { type: 'shoot', kind })) - 1) < 1e-9);
+  let pl = FB.evaluate(m, { type: 'shoot' }), dr = FB.evaluate(m, { type: 'shoot', kind: 'driven' });
+  assert.ok(dr.p > pl.p * 1.15, `driven from range ${dr.p} vs ${pl.p}`);
+  assert.ok(dr.shot.pOn < pl.shot.pOn && dr.shot.rebound > pl.shot.rebound);
+  assert.equal(dr.outcomes.find((o) => o.k === 'saved').rebound, dr.shot.rebound);
+  m.players[13].x = 81; m.players[13].y = 31; // a blocker in the way
+  assert.ok(FB.evaluate(m, { type: 'shoot', kind: 'driven' }).shot.pBlock > FB.evaluate(m, { type: 'shoot' }).shot.pBlock);
+  m.players[13].x = 102; m.players[13].y = 66;
+  give(m, 9, 95, 32); // close in: placing it beats power
+  assert.ok(FB.evaluate(m, { type: 'shoot', kind: 'driven' }).p < FB.evaluate(m, { type: 'shoot' }).p);
+  // the keeper comes off his line
+  keeperAt(99.5); // 5.5 m out: a chip is allowed but placing it is still better
+  give(m, 9, 86, 34);
+  assert.ok(FB.shotKinds(m).includes('chip'));
+  assert.ok(FB.evaluate(m, { type: 'shoot', kind: 'chip' }).p < FB.evaluate(m, { type: 'shoot' }).p);
+  keeperAt(93); // 12 m out: chip it
+  const ch = FB.evaluate(m, { type: 'shoot', kind: 'chip' });
+  assert.ok(ch.p > FB.evaluate(m, { type: 'shoot' }).p, `chip ${ch.p}`);
+  assert.ok(Math.abs(sumP(ch) - 1) < 1e-9);
+  m.players[13].x = 89; m.players[13].y = 34; // chipped over a blocker
+  assert.ok(FB.evaluate(m, { type: 'shoot', kind: 'chip' }).shot.pBlock < FB.evaluate(m, { type: 'shoot' }).shot.pBlock);
+  m.setPiece = { type: 'freekick', direct: true }; // no chips from a free kick
+  assert.deepEqual(FB.shotKinds(m), ['placed', 'driven']);
+});
+
+test('shot kinds: the CPU weighs every kind but keeps only its best shot among the candidates', () => {
+  const m = fresh(6);
+  clearPitch(m);
+  m.players[11].x = 93; m.players[11].y = 34;
+  give(m, 9, 84, 34);
+  const shots = FB.AI.scored(m).filter((x) => x.a.type === 'shoot');
+  assert.equal(shots.length, 1);
+  const best = Math.max(...FB.shotKinds(m).map((k) => FB.AI.evOf(m, { type: 'shoot', kind: k }, FB.evaluate(m, { type: 'shoot', kind: k }), FB.AI.context(m, 0))));
+  assert.ok(Math.abs(shots[0].v - best) < 1e-12);
+});
+
 test('tackle odds are a proper distribution and closer is better', () => {
   const m = fresh(7);
   clearPitch(m);

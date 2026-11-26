@@ -38,6 +38,8 @@
     penalty: ['PENALTY! {c} brings down {a} in the box!', 'The referee points to the spot! {c} has fouled {a}!'],
     yellow: ['Yellow card for {c}.', '{c} goes into the book.'],
     red: ['RED CARD! {c} is sent off!', 'Second yellow — {c} has to go!'],
+    shotDriven: ['{a} leathers it!', '{a} drills one at goal!', '{a} hits it with everything!'],
+    shotChip: ['{a} tries to chip the keeper!', '{a} dinks it over...', 'Cheeky from {a}: a chip!'],
     shot: ['{a} shoots!', '{a} lets fly!', '{a} has a go!', '{a} pulls the trigger!'],
     goal: ['GOAL! {a} scores for {t}!', 'GOAL!! {a} finds the net!', 'IT\'S IN! {a}!', 'GOAL! What a finish from {a}!'],
     goalLate: ['GOAL! LATE DRAMA! {a} has done it for {t}!', 'GOAL!!! In the dying moments — {a}!'],

@@ -33,7 +33,7 @@ FB.resolveAttack = (m, a) => {
   const shown = FB.evaluate(m, a);
   const out = att(m, a), res = out.result;
   const kept = m.carrier != null ? m.players[m.carrier].team === t : !!(m.restart && m.restart.team === t);
-  const k = a.type + (shown.header ? ' (header)' : '');
+  const k = a.type + (shown.header ? ' (header)' : a.kind ? ` (${a.kind})` : '');
   const o = cal[k] || (cal[k] = { n: 0, shown: 0, actual: 0 });
   o.n++; o.shown += shown.p;
   if (a.type === 'shoot' ? res === 'goal' : shown.header ? ['goal', 'saved', 'wide'].includes(res) : a.type === 'clear' ? res === 'cleared' : res === 'ok') o.actual++;
