@@ -945,3 +945,45 @@ test('stoppage time is announced in both halves', () => {
   assert.ok(m.added[1] >= 1 && m.added[1] <= 6);
   assert.ok(m.feed.some((f) => f.kind === 'added'));
 });
+
+/** Time is up in the first half (stoppage time over) with the given state staged. */
+function atTime(m) { m.added[0] = 2; m.time = FB.HALF + 2 * 60 + 5; m.cost = 0.001; m.carryCost = 0; }
+test('last attack: play goes on while a team attacks in the final third, until the ball is lost, for at most 3 beats', () => {
+  let m = fresh(5);
+  clearPitch(m);
+  give(m, 9, 50, 34);
+  atTime(m);
+  assert.ok(FB.endBeat(m).includes('halftime'), 'no last attack from halfway');
+  m = fresh(5);
+  clearPitch(m);
+  give(m, 9, 82, 34);
+  atTime(m);
+  const ev = FB.endBeat(m);
+  assert.ok(ev.includes('lastAttack') && !ev.includes('halftime') && m.half === 1);
+  assert.ok(m.feed.some((f) => f.kind === 'added' && /finish|last/i.test(f.text)));
+  assert.ok(!FB.endBeat(m).includes('halftime') && !FB.endBeat(m).includes('halftime'));
+  assert.ok(FB.endBeat(m).includes('halftime'), 'three beats at most');
+  assert.equal(FB.lastAttack(m), null);
+  // lost: over at once
+  m = fresh(5);
+  clearPitch(m);
+  give(m, 9, 82, 34);
+  atTime(m);
+  FB.endBeat(m);
+  give(m, 14, 70, 30); // the other side has it now
+  assert.ok(FB.endBeat(m).includes('halftime'));
+});
+
+test('last attack: a corner at time is taken, and the ball going out again ends it; a penalty is always taken', () => {
+  const m = fresh(5);
+  m.restart = { type: 'corner', team: 0, pos: { x: 105, y: 0 } }; m.carrier = null;
+  atTime(m);
+  assert.ok(FB.endBeat(m).includes('lastAttack'));
+  m.restart = { type: 'corner', team: 0, pos: { x: 105, y: 68 } };
+  assert.ok(FB.endBeat(m).includes('halftime'));
+  const p = fresh(5);
+  p.restart = { type: 'penalty', team: 1, pos: { x: 11, y: 34 } }; p.carrier = null;
+  atTime(p);
+  const ev = FB.endBeat(p);
+  assert.ok(!ev.includes('halftime') && !ev.includes('lastAttack'));
+});

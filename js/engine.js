@@ -51,6 +51,10 @@
     loose: { noise: 0.9, down: 0.8, reach: 1,
       scatter: { passMiss: 8, passTouch: 3.5, throughMiss: 12, throughTouch: 4, lobMiss: 12, lobTouch: 4, dribble: 3, clear: 10 } },
     counterMax: 2,         // counter-attacks allowed per beat (stops endless ping-pong)
+    // Last attack: when time is up and a team is on the ball past `fromX` m (its own frame), or has a corner or a free kick
+    // past `fkX` m, the referee lets it finish: play on until the ball is lost, out, scored or played back behind `backX` m,
+    // for at most `beats` beats. A penalty is always taken.
+    lastAttack: { beats: 3, fromX: 70, fkX: 74, backX: 60 },
     // Corners. A header from the delivery scores `header` times the usual chance (a crowded six-yard box). One attacker
     // waits `short` m from the flag for a short corner. How a team defends them is a setting it keeps (FB.setCornerDef):
     // man = a defender goal-side of each attacker in the box; zonal = defenders hold spots in and around the six-yard box
@@ -1773,12 +1777,24 @@
       ev.push('added');
     }
     if (m.added[hi] != null && m.time >= hEnd + m.added[hi] * 60) {
-      const penPending = m.restart && m.restart.type === 'penalty';
-      if (!penPending) {
+      let playOn = !!(m.restart && m.restart.type === 'penalty');
+      const la = m.lastAttack;
+      if (!playOn && la) playOn = --la.left > 0 && attacking(m, la.team);
+      else if (!playOn && !m.lastAttackDone) {
+        const t = m.restart ? m.restart.team : m.poss;
+        if ((m.restart || m.carrier != null) && attacking(m, t, true)) {
+          m.lastAttack = { team: t, left: TUNE.lastAttack.beats };
+          say(m, 'lastAttack', { t: m.teams[t].name, team: t }, 'added');
+          ev.push('lastAttack');
+          playOn = true;
+        }
+      }
+      if (!playOn) {
+        if (m.lastAttack) { m.lastAttack = null; m.lastAttackDone = true; } // one last attack per half
         const sc = `${m.teams[0].name} ${m.score[0]}–${m.score[1]} ${m.teams[1].name}`;
         if (m.half === 1) {
           say(m, 'halftime', { p: sc }, 'whistle');
-          m.half = 2; m.time = HALF; m.halfEvents = { goals: 0, cards: 0, stops: 0 };
+          m.half = 2; m.time = HALF; m.halfEvents = { goals: 0, cards: 0, stops: 0 }; m.lastAttackDone = false;
           m.goalsAtHalf = m.score[0] + m.score[1];
           m.restart = { type: 'kickoff', team: 1 - m.firstKick };
           m.carrier = null;
@@ -1794,6 +1810,18 @@
     m.phase = 'idle';
     return ev;
   };
+
+  /**
+   * Is team t still on the attack, for the last-attack rule? A dangerous restart for t counts (a corner only to start one: once
+   * it's going, the ball going out ends it), and so does t on the ball in open play far enough upfield.
+   */
+  function attacking(m, t, start) {
+    const A = TUNE.lastAttack, R = m.restart;
+    if (R) return R.team === t && (R.type === 'freekick' && rel(t, R.pos).x > A.fkX || start && R.type === 'corner');
+    const c = carrierP(m);
+    return !!c && c.team === t && rel(t, c).x > (start ? A.fromX : A.backX);
+  }
+  FB.lastAttack = (m) => m.lastAttack;
 
   // snapshot helpers for AI look-ahead
   FB.snapshot = (m) => ({ pos: m.players.map((p) => [p.x, p.y]), beaten: new Set(m.beaten), marks: Object.assign({}, m.marks),

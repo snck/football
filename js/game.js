@@ -145,6 +145,11 @@
     if (evs.includes('halftime')) { window.Sound.play('whistle3'); await report('half'); UI.R.syncAll(); }
     if (evs.includes('fulltime')) { window.Sound.play('whistle3'); await report('full'); }
     if (evs.includes('added')) window.Sound.play('cheer');
+    if (evs.includes('lastAttack')) {
+      window.Sound.play('whistle');
+      const la = FB.lastAttack(m);
+      flashHint(`Time is up, but ${la.team === HUMAN ? 'you get' : 'they get'} to finish this attack: play goes on until the ball is lost, goes out or is scored (at most ${FB.TUNE.lastAttack.beats} more turns).`);
+    }
   }
 
   async function attackPhase(token, counterStart) {
@@ -790,7 +795,7 @@
   function toMenu() { loopToken++; UI.wait = null; UI.phase = 'menu'; UI.paused = false; $('pause').classList.add('hidden'); $('report').classList.add('hidden'); $('penalty').classList.add('hidden'); $('menu').classList.remove('hidden'); refreshMenu(); }
 
   // ------------------------------------------------------------------ HUD
-  function setPhase(t, cls) { const el = $('phase'); el.textContent = t; el.className = 'phase ' + (cls || ''); }
+  function setPhase(t, cls) { const el = $('phase'); el.textContent = t + (UI.m && FB.lastAttack(UI.m) && cls !== 'wait' ? ' · LAST ATTACK' : ''); el.className = 'phase ' + (cls || ''); }
   const stripKeys = (t) => (t && isTouch() ? t.replace(/\s*\((Enter|Space|Esc|R|[QWE])\)/g, '') : t);
   function setButtons(go, alt) {
     const g = $('btnGo'), a = $('btnAlt');

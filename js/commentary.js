@@ -60,6 +60,7 @@
     clear: ['{a} hoofs it clear.', '{a} launches it upfield.', 'No messing about — {a} clears.'],
     loose: ['Loose ball... {a} picks it up for {t}.', 'It breaks for {a}.', 'Scramble — {a} comes away with it.'],
     added: ['The fourth official shows {p} added minutes.', 'There will be {p} minutes of stoppage time.'],
+    lastAttack: ['Time is up, but the referee lets {t} finish this attack.', 'The whistle is in his mouth... {t} have one last chance.', 'Last attack for {t}!'],
     halftime: ['Half-time. {p}.', 'The referee blows for the break. {p}.'],
     fulltime: ['FULL TIME! {p}.', 'That is it — the final whistle! {p}.'],
     pressure: ['{t} are piling on the pressure.', 'All {t} at the moment.'],
