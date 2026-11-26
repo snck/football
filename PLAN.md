@@ -16,7 +16,7 @@ when the cycle is done.
 | 4 | B. Lasting marks, costlier trap | **done** (mark target missed, user accepted it, see "Phase 4 result") |
 | 5 | C. Teammate runs | **done** (user dropped the +0.15 run target, see "Phase 5 result") |
 | 6 | D. Through balls (variety only; may be dropped after 3–5) | **done** (Deep − Normal −0.12, user accepted it, see "Phase 6 result") |
-| 7 | Extras: shot types, corners, last attack, identity, half-time choice | **built**, waiting for the user on the open points in "Phase 7 result" |
+| 7 | Extras: shot types, corners, last attack, identity, half-time choice | **done** (user kept everything as built, see "Phase 7 result") |
 | 8 | Final docs, full balance pass, ask about publishing | todo, **next** |
 
 Update this table and the log at the bottom at the end of every phase.
@@ -631,7 +631,10 @@ Engine tests 48 → 58. Browser: headless Chrome driven over CDP from the scratc
 the pause menu, last attack (banner, hint, feed), half-time shape choice; no console errors, no sideways scroll. On a phone the shot buttons show but are
 cut off at the bottom of the preview box (it scrolls).
 
-**Open points for the user:**
+**Decision (user, 2026-11-26):** keep everything as it is: no goal tuning, no change to zonal's head start, nothing done about "always tackle/press"
+or the run habits. The 4-3-3 half-time recheck stays part of phase 8's full balance pass (measurement only). The two raise-only items were not taken up.
+
+Open points as they were put to the user:
 - Goals/team rose 1.21 → 1.28 (inside 1.10–1.35). Corner goals halved, but open-play direct goals rose (0.71 → 0.91 a match): driven shots and the last
   attack. Not tuned.
 - "always tackle/press" went from 80-67-153 to 113-59-128: still loses, but much closer. Not diagnosed (the change came with items 2–5, not item 1).
@@ -709,3 +712,4 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   build (only item 1 has its own hold-out); per-item tuning runs are listed under "Measured on tuning seeds". Scratch tools (`corners.js`, `cmirror.js`,
   `hmirror.js`, `kinds.js`, `clubs.js`, the CDP driver) lived in the session scratchpad and are not committed. DESIGN, README, how-to text and CLAUDE.md
   are current; DEVLOG waits for phase 8. Waiting for the user on the open points.
+- 2026-11-26: the user kept everything as it is. Phase 7 closed; documentation only, no game code changed.
