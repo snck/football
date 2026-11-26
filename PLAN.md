@@ -15,8 +15,8 @@ when the cycle is done.
 | 3 | A. Cover / jockey | **done** (user dropped the chain-share target, see "Phase 3 result") |
 | 4 | B. Lasting marks, costlier trap | **done** (mark target missed, user accepted it, see "Phase 4 result") |
 | 5 | C. Teammate runs | **done** (user dropped the +0.15 run target, see "Phase 5 result") |
-| 6 | D. Through balls (variety only; may be dropped after 3–5) | **built**, waiting on the user about Deep (see "Phase 6 result") |
-| 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo, **next** once phase 6 is closed |
+| 6 | D. Through balls (variety only; may be dropped after 3–5) | **done** (Deep − Normal −0.12, user accepted it, see "Phase 6 result") |
+| 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo, **next** |
 | 8 | Final docs, full balance pass, ask about publishing | todo |
 
 Update this table and the log at the bottom at the end of every phase.
@@ -550,8 +550,8 @@ Calibration within 1.1 points everywhere (through 63.4/63.4, pass 79.4/79.4, sho
 Speed unchanged (`sim 1000 45` 224 s before, 228 s after, machine busy). Engine tests 46 → 48. Browser: headless Chrome at desktop, 375×667 and 667×375
 showed the facing line, the soft-pass line, the "−3% (a short pass set it up)" banner and the touch preview rule, no console errors, no sideways scroll.
 
-**Open question for the user:** Deep − Normal is now −0.12. Options: accept it (Deep stays a situational choice, the CPU only goes deep when leading
-late), or a small Deep re-tune in phase 8's balance pass (for example its `aerial` or `ownThird`), measured on new seeds.
+**Decision (user, 2026-11-26):** accept Deep as it is (−0.12 against Normal). No Deep re-tune, in phase 8 either, unless the user asks. The README now
+calls Deep "weaker" (it said "slightly weaker").
 
 ## Phase 7: extras (independent, each its own commit)
 
@@ -634,4 +634,5 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
 - 2026-11-26: the user kept runs as they are and dropped the +0.15 target. Phase 5 closed; documentation only, no game code changed.
 - 2026-11-26: phase 6, see "Phase 6 result" above. The user asked for the next phase. The first build of the facing rule skipped the line's react and
   put Deep 0.16 behind Normal on the hold-out; the final rule adds it, as the spec said. Deep is still 0.12 behind (was 0.05): waiting for the user.
-  DESIGN, README, how-to text are current (README still calls Deep "slightly weaker"); DEVLOG entry waits for phase 8. No CLAUDE.md change needed.
+  DESIGN, README, how-to text are current; DEVLOG entry waits for phase 8. No CLAUDE.md change needed.
+- 2026-11-26: the user accepted Deep as it is. Phase 6 closed; README wording only ("Deep is weaker"), no game code changed.
