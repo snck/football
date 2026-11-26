@@ -158,6 +158,65 @@ test('shot kinds: the CPU weighs every kind but keeps only its best shot among t
   assert.ok(Math.abs(shots[0].v - best) < 1e-12);
 });
 
+/** A corner for team 0 at the top right flag, with team 1 defending it the given way. */
+function corner(def, seed = 4) {
+  const m = fresh(seed);
+  FB.setCornerDef(m, 1, def);
+  m.restart = { type: 'corner', team: 0, pos: { x: 105, y: 0 } };
+  m.carrier = null;
+  FB.startBeat(m);
+  return m;
+}
+test('corners: a short option near the flag; man marking puts a defender on every attacker in the box', () => {
+  const m = corner('man');
+  assert.equal(m.setPiece.type, 'corner');
+  const c = FB.carrier(m);
+  const mates = FB.active(m, 0).filter((p) => p !== c && p.role !== 'GK');
+  const short = mates.filter((p) => FB.dist(p, c) >= 10 && FB.dist(p, c) <= 12);
+  assert.equal(short.length, 1);
+  assert.ok(FB.active(m, 1).every((d) => FB.dist(d, short[0]) > 5), 'the short option is free');
+  assert.ok(FB.evaluate(m, { type: 'pass', to: short[0].id }).p > 0.85);
+  const inBox = mates.filter((p) => FB.inOppBox(p));
+  assert.ok(inBox.length >= 4);
+  for (const a of inBox) assert.ok(FB.active(m, 1).some((d) => d.role !== 'GK' && FB.dist(d, a) < 1.6), `${a.name} is marked`);
+  assert.equal(FB.setCornerDef(m, 1, 'sweeper'), false);
+  assert.equal(m.cornerDef[1], 'man');
+});
+
+test('corners: zonal defenders hold their spots and win more in the air; two up leaves two on halfway and one fewer attacker in the box', () => {
+  const man = corner('man'), zonal = corner('zonal'), up2 = corner('up2');
+  const box = (m, t) => FB.active(m, t).filter((p) => p.role !== 'GK' && FB.inOppBox(FB.rel(0, p))).length;
+  // zonal: the same spots whoever attacks them
+  const spots = (m) => FB.active(m, 1).filter((p) => p.role !== 'GK' && p.x > 95).map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).sort();
+  assert.deepEqual(spots(zonal), spots(corner('zonal', 9)));
+  // the same delivery against the same attackers: zonal defenders get their head start
+  const T = { x: 98, y: 31 };
+  const a = FB.evaluate(zonal, { type: 'lob', target: T });
+  assert.ok(a.zonal && Math.abs(a.aerial - FB.lineFx(zonal, 1).aerial - FB.TUNE.corner.zonalAerial) < 1e-9);
+  FB.setCornerDef(zonal, 1, 'man');
+  const b = FB.evaluate(zonal, { type: 'lob', target: T });
+  assert.ok(!b.zonal && a.pWin < b.pWin, `${a.pWin} vs ${b.pWin}`);
+  // up2
+  const far = FB.active(up2, 1).filter((p) => p.x < 55);
+  assert.equal(far.length, 2);
+  assert.ok(far.every((p) => p.role !== 'DF'));
+  assert.equal(box(up2, 0), box(man, 0) - 1);
+  assert.ok(box(up2, 1) < box(man, 1));
+});
+
+test('corners: a header from the delivery scores less than the same header in open play, and the setting lasts', () => {
+  const m = corner('man');
+  const ev = FB.evaluate(m, { type: 'lob', target: { x: 99, y: 30.5 } });
+  assert.ok(ev.header && ev.corner);
+  m.setPiece = null;
+  const open = FB.evaluate(m, { type: 'lob', target: { x: 99, y: 30.5 } });
+  assert.ok(Math.abs(ev.shot.xg - open.shot.xg * FB.TUNE.corner.header) < 0.004, `${ev.shot.xg} vs ${open.shot.xg}`);
+  const z = corner('zonal');
+  z.restart = { type: 'corner', team: 0, pos: { x: 105, y: 68 } }; z.carrier = null;
+  FB.startBeat(z);
+  assert.equal(z.cornerDef[1], 'zonal');
+});
+
 test('tackle odds are a proper distribution and closer is better', () => {
   const m = fresh(7);
   clearPitch(m);

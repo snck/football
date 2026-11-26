@@ -51,6 +51,12 @@
     loose: { noise: 0.9, down: 0.8, reach: 1,
       scatter: { passMiss: 8, passTouch: 3.5, throughMiss: 12, throughTouch: 4, lobMiss: 12, lobTouch: 4, dribble: 3, clear: 10 } },
     counterMax: 2,         // counter-attacks allowed per beat (stops endless ping-pong)
+    // Corners. A header from the delivery scores `header` times the usual chance (a crowded six-yard box). One attacker
+    // waits `short` m from the flag for a short corner. How a team defends them is a setting it keeps (FB.setCornerDef):
+    // man = a defender goal-side of each attacker in the box; zonal = defenders hold spots in and around the six-yard box
+    // and get `zonalAerial` s of head start in the air, but nobody follows the attackers; up2 = two players stay upfield
+    // and the attackers keep one more man back to watch them.
+    corner: { header: 0.6, short: 11, zonalAerial: 0.25, defs: ['man', 'zonal', 'up2'] },
     // Line height trade-offs (the defending team's line):
     //  react: extra seconds an outfield defender needs to turn and chase a ball played in behind
     //  block: multiplier on shot-block chances (a set deep block has bodies in the way)
@@ -96,6 +102,7 @@
       teams: [o.home, o.away].map((def, t) => ({ def, t, name: def.name, short: def.short, colors: def.colors, style: def.style })),
       players: [], time: 0, half: 1, added: [null, null], score: [0, 0], poss: 0, carrier: null,
       ball: { x: L / 2, y: W / 2 }, restart: null, setPiece: null, lines: [o.home.style.line, o.away.style.line],
+      cornerDef: [o.home.style.corner || 'man', o.away.style.corner || 'man'],
       stats: [mkStats(), mkStats()], feed: [], goals: [], beat: 0, over: false, momentum: 0,
       beaten: new Set(), marks: {}, markOrders: [null, null], runs: [null, null], runMade: null, trapped: null, cover: null, lastPasser: null, lastTouch: 0, halfEvents: { goals: 0, cards: 0, stops: 0 },
       phase: 'idle', history: [],
@@ -108,7 +115,7 @@
         m.players.push(Object.assign({}, s, { id: t * 11 + s.slot, team: t, attrs, x: 0, y: 0, yellow: 0, off: false, recover: 0 }));
       });
     });
-    if (m.human >= 0) m.lines[m.human] = 'normal';
+    if (m.human >= 0) { m.lines[m.human] = 'normal'; m.cornerDef[m.human] = 'man'; }
     m.restart = { type: 'kickoff', team: 0 };
     m.firstKick = 0;
     return m;
@@ -489,44 +496,57 @@
     }
     if (R.type === 'corner') {
       const top = R.pos.y < W / 2;
-      const flag = abs(t, { x: L - 0.5, y: 0 });
       const fy = top ? 0.6 : W - 0.6;
       const spot = { x: R.pos.x < L / 2 ? 0.6 : L - 0.6, y: fy };
       const sRel = rel(t, spot);
       const near = sRel.y < 34 ? -1 : 1; // which side in rel frame
+      const def = m.cornerDef[o];
       const atk = active(m, t).filter((p) => p.role !== 'GK');
       const taker = atk.filter((p) => p.role !== 'DF').sort((a, b) => b.attrs.pass - a.attrs.pass)[0];
       const rest = atk.filter((p) => p !== taker).sort((a, b) => b.attrs.head - a.attrs.head);
-      const zones = [{ x: 99, y: 34 + near * 3.5 }, { x: 98, y: 34 - near * 3 }, { x: 94, y: 34 }, { x: 97.5, y: 34 - near * 8 }, { x: 92, y: 34 + near * 6 }, { x: 86, y: 34 - near * 2 }];
+      const shortMan = rest.length > 6 ? rest.splice(6, 1)[0] : null; // the best header not needed in the box
+      // against two left upfield the attackers keep one more back: one fewer in the box
+      const zones = [{ x: 99, y: 34 + near * 3.5 }, { x: 98, y: 34 - near * 3 }, { x: 94, y: 34 }, { x: 97.5, y: 34 - near * 8 }, { x: 92, y: 34 + near * 6 }, { x: 86, y: 34 - near * 2 }]
+        .filter((z, i) => def !== 'up2' || i !== 4);
       const back = [{ x: 62, y: 22 }, { x: 62, y: 46 }, { x: 74, y: 34 }, { x: 80, y: 18 }];
       rest.forEach((p, i) => {
         const r = i < zones.length ? zones[i] : back[(i - zones.length) % back.length];
         const a = abs(t, { x: r.x + (m.rng() - 0.5), y: r.y + (m.rng() - 0.5) * 1.5 });
         p.x = a.x; p.y = a.y;
       });
+      if (shortMan) { const a = abs(t, { x: L - 8, y: sRel.y - near * 7.5 }); shortMan.x = a.x; shortMan.y = a.y; }
       const gkA = active(m, t).find((p) => p.role === 'GK');
       if (gkA) { const a = abs(t, { x: 30, y: 34 }); gkA.x = a.x; gkA.y = a.y; }
       // defenders
       const defs = active(m, o).filter((p) => p.role !== 'GK');
       const gk = active(m, o).find((p) => p.role === 'GK');
       if (gk) { const a = abs(t, { x: L - 0.8, y: 34 + near * 0.8 }); gk.x = a.x; gk.y = a.y; }
-      const inBox = rest.filter((p) => FB.inOppBox(rel(t, p)));
       const pool = defs.slice().sort((a, b) => b.attrs.head - a.attrs.head);
+      if (def === 'up2') { // the two quickest who aren't defenders wait on halfway
+        const up = pool.filter((p) => p.role !== 'DF').sort((a, b) => b.attrs.pace - a.attrs.pace).slice(0, 2);
+        up.forEach((p, i) => { const a = abs(t, { x: 54, y: 34 + (i ? 9 : -9) }); p.x = a.x; p.y = a.y; pool.splice(pool.indexOf(p), 1); });
+      }
       const postMan = pool.pop();
       if (postMan) { const a = abs(t, { x: L - 0.8, y: 34 + near * 4.2 }); postMan.x = a.x; postMan.y = a.y; }
-      for (const ap of inBox) {
-        const d = pool.shift();
-        if (!d) break;
-        const ar = rel(t, ap);
-        const a = abs(t, { x: ar.x + 1.1, y: ar.y + (34 - ar.y) * 0.08 });
-        d.x = a.x; d.y = a.y;
+      if (def === 'zonal') { // best headers on the spots nearest the goal
+        const spots = [{ x: L - 3, y: 34 + near * 2 }, { x: L - 3, y: 34 - near * 2 }, { x: L - 3.5, y: 34 - near * 5.5 }, { x: L - 8, y: 34 + near * 1 },
+          { x: L - 8.5, y: 34 - near * 4 }, { x: L - 12, y: 34 + near * 3 }, { x: L - 13, y: 34 - near * 6 }];
+        for (const sp of spots) { const d = pool.shift(); if (!d) break; const a = abs(t, sp); d.x = a.x; d.y = a.y; }
+      } else {
+        const inBox = rest.filter((p) => FB.inOppBox(rel(t, p)));
+        for (const ap of inBox) {
+          const d = pool.shift();
+          if (!d) break;
+          const ar = rel(t, ap);
+          const a = abs(t, { x: ar.x + 1.1, y: ar.y + (34 - ar.y) * 0.08 });
+          d.x = a.x; d.y = a.y;
+        }
       }
       pool.forEach((d, i) => {
         const r = i < 2 ? { x: 88, y: 34 + (i ? 8 : -8) } : { x: 66 + i * 2, y: 34 + (i % 2 ? 10 : -10) };
         const a = abs(t, r); d.x = a.x; d.y = a.y;
       });
       taker.x = spot.x; taker.y = spot.y;
-      void flag;
       setCarrier(m, taker);
       for (const p of m.players) moves[p.id] = { x: p.x, y: p.y };
       return moves;
@@ -788,7 +808,7 @@
     const kind = o.header ? 'header' : o.kind || 'placed';
     const K = TUNE.shot[kind] || TUNE.shot.placed;
     let xg = base * (0.8 + 0.01 * (skill - 65)) * (1 - TUNE.shotPressure * Math.min(1, pr));
-    if (o.header) xg *= 0.27;
+    if (o.header) xg *= 0.27 * (o.corner ? TUNE.corner.header : 1);
     if (o.setPiece) xg *= 0.85;
     const dGoal = Math.hypot(L - r.x, 34 - r.y);
     if (kind === 'driven') xg *= clamp(1 + K.range * (dGoal - K.from), K.min, K.max);
@@ -829,6 +849,12 @@
       held: save[0], pushed: save[1], rebound: 1 - save[0] - save[1] };
   }
   FB.shotModel = shotModel;
+  /** How a team defends corners from now on: 'man', 'zonal' or 'up2' (two left upfield). Returns false if not allowed. */
+  FB.setCornerDef = function (m, team, def) {
+    if (!TUNE.corner.defs.includes(def) || (team !== 0 && team !== 1)) return false;
+    m.cornerDef[team] = def;
+    return true;
+  };
   /** How far (m) a keeper stands off his line, from the middle of his goal. */
   function keeperOff(gk, atkTeam) { const gr = rel(atkTeam, gk); return Math.hypot(L - gr.x, 34 - gr.y); }
   /** Which shot kinds the carrier can try now (null when he can't shoot). A chip needs the keeper off his line. */
@@ -1034,7 +1060,9 @@
       const hang = dP / 14 + 0.6;
       const tA = Math.max(0, dist(r, T) - 1) / speed(r);
       let tD = 99, duel = null;
-      const aerial = FB.inOppBox(rel(c.team, T)) ? lineFx(m, opp(c.team)).aerial : 0;
+      const corner = sp === 'corner';
+      const zonal = corner && m.cornerDef[opp(c.team)] === 'zonal';
+      const aerial = FB.inOppBox(rel(c.team, T)) ? lineFx(m, opp(c.team)).aerial + (zonal ? TUNE.corner.zonalAerial : 0) : 0;
       for (const o of active(m, opp(c.team))) {
         if (o.role === 'GK' || m.beaten.has(o.id)) continue;
         const tt = Math.max(0, dist(o, T) - 1) / speed(o) + 0.12 - aerial;
@@ -1058,7 +1086,7 @@
       let shot = null, pSucc, ctrl = 1;
       if (offP > 0) outcomes.push({ p: pc0 * offP, k: 'offside', pos: { x: r.x, y: r.y } });
       if (header) {
-        shot = shotModel(m, r, T, { header: true, pressure: duel ? clamp((6 - dist(duel, T)) / 5, 0, 1) * 0.6 : 0 });
+        shot = shotModel(m, r, T, { header: true, corner, pressure: duel ? clamp((6 - dist(duel, T)) / 5, 0, 1) * 0.6 : 0 });
         const pH = pc0 * on * (1 - pClaim) * pWin;
         pSucc = pH; // winning the header
         outcomes.push({ p: pH * shot.xg, k: 'goal' });
@@ -1076,7 +1104,7 @@
       }
       outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.lobMiss) });
       outcomes.push({ p: exec * charge.p, k: 'lose', pos: c });
-      return { valid: true, type: 'lob', p: pSucc, exec, charge, pWin, pClaim, ctrl, header, shot, offP, recv: r.id, duel: duel && duel.id, aerial,
+      return { valid: true, type: 'lob', p: pSucc, exec, charge, pWin, pClaim, ctrl, header, shot, offP, recv: r.id, duel: duel && duel.id, aerial, corner, zonal,
         d: dP, outcomes, target: T, threats: (duel ? [duel.id] : []).concat(pClaim > 0.1 && gk ? [gk.id] : []) };
     }
     if (a.type === 'dribble') {

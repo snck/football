@@ -73,6 +73,7 @@
     const qs = new URLSearchParams(location.search);
     const seed = qs.get('seed') ? +qs.get('seed') : undefined; // ?seed=123 for reproducible matches
     UI.m = FB.createMatch({ home, away, human: HUMAN, difficulty: UI.opts.diff, length: UI.opts.len, seed });
+    FB.setCornerDef(UI.m, HUMAN, store.get('cornerDef', 'man'));
     UI.feedIdx = 0; $('feed').innerHTML = '';
     UI.rec = []; UI.started = performance.now(); UI.pausedMs = 0;
     UI.R.setMatch(UI.m);
@@ -162,7 +163,8 @@
         const ctr = !first && FB.isCounter(m);
         setPhase(first ? 'CPU in possession…' : ctr ? 'CPU won the ball. Counter-attack?' : 'CPU plays it quick…', 'wait');
         hint('The opponent is on the ball. Watch how the move plays out. The caption explains the odds.');
-        $('modes').innerHTML = ''; $('extra').innerHTML = ''; $('preview').innerHTML = cpuThinkingText();
+        $('modes').innerHTML = ''; $('preview').innerHTML = cpuThinkingText();
+        $('extra').innerHTML = first && m.setPiece && m.setPiece.type === 'corner' ? `<span>${setPieceText(m)}</span>` : '';
         setButtons(null, null);
         await sleep(first ? 380 : 220);
         a = first ? FB.AI.chooseAttack(m) : FB.AI.chooseQuick(m);
@@ -397,7 +399,8 @@
       lines.push(`Delivery ${pct(ev.exec)}`);
       lines.push(`Aerial duel${ev.duel != null ? ' vs ' + nm(ev.duel) : ''}: ${pct(ev.pWin)}`);
       if (ev.pClaim > 0.02) lines.push(`Keeper may claim: ${pct(ev.pClaim)}`);
-      if (ev.header) lines.push(`<b>Header at goal</b> if won → scores ${pct(ev.shot.xg)} (overall goal ~${pct(ev.p * ev.shot.xg)})`);
+      if (ev.header) lines.push(`<b>Header at goal</b> if won → scores ${pct(ev.shot.xg)}${ev.corner ? ` (a crowded box: ${pct(FB.TUNE.corner.header)} of an open-play header)` : ''} (overall goal ~${pct(ev.p * ev.shot.xg)})`);
+      if (ev.zonal) lines.push(`They defend corners zonally: defenders hold spots and attack the ball (+${FB.TUNE.corner.zonalAerial}s in the air). Look for a gap between them.`);
     } else if (a.type === 'dribble') {
       head = `Dribble ${Math.round(ev.d)} m`;
       big = pct(ev.p);
@@ -660,7 +663,9 @@
   }
   function setPieceText(m) {
     const t = m.setPiece.type;
-    return { corner: 'Corner! Cross it into a zone or play it short.', freekick: m.setPiece.direct ? 'Free kick in range. Shoot over the wall or cross.' : 'Free kick.', kickoff: 'Kick-off.', penalty: 'Penalty!' }[t] || '';
+    const cd = CORNER_DEF[m.cornerDef[1 - m.poss]].toLowerCase();
+    return { corner: m.poss === HUMAN ? `Corner! Cross it to the near or far post, or play it short. They defend corners: ${cd}.`
+      : `Corner against you. You defend it: ${cd} (${tx('Esc', 'pause')} to change it for the next one).`, freekick: m.setPiece.direct ? 'Free kick in range. Shoot over the wall or cross.' : 'Free kick.', kickoff: 'Kick-off.', penalty: 'Penalty!' }[t] || '';
   }
   function cpuThinkingText() {
     const m = UI.m;
@@ -1067,8 +1072,22 @@
     if (UI.paused) {
       UI.pauseT0 = performance.now();
       const realMin = ((performance.now() - UI.started - (UI.pausedMs || 0)) / 60000).toFixed(1);
+      cornerPick();
       $('pauseInfo').textContent = `${UI.m.teams[0].name} ${UI.m.score[0]}–${UI.m.score[1]} ${UI.m.teams[1].name} · ${FB.clockText(UI.m)} · ${realMin} min played`;
     } else if (UI.pauseT0) { UI.pausedMs = (UI.pausedMs || 0) + performance.now() - UI.pauseT0; UI.pauseT0 = 0; }
+  }
+
+  const CORNER_DEF = { man: 'Man', zonal: 'Zonal', up2: 'Two up' };
+  const CORNER_TXT = {
+    man: 'Man marking: a defender goal-side of each attacker in the box.',
+    zonal: `Zonal: defenders hold spots in and around the six-yard box and attack the ball (+${FB.TUNE.corner.zonalAerial}s in the air), but nobody follows the runners.`,
+    up2: 'Two up: your two quickest midfielders or forwards wait on halfway to break, and they keep one more man back to watch them. One fewer of yours in the box.',
+  };
+  /** The corner setting in the pause menu: kept for every corner against you from then on. */
+  function cornerPick() {
+    const info = () => { $('cornerInfo').textContent = CORNER_TXT[UI.m.cornerDef[HUMAN]]; };
+    seg($('cornerPick'), Object.entries(CORNER_DEF), () => UI.m.cornerDef[HUMAN], (v) => { FB.setCornerDef(UI.m, HUMAN, v); store.set('cornerDef', v); info(); });
+    info();
   }
 
   // ------------------------------------------------------------------ boot
