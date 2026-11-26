@@ -18,7 +18,12 @@ eats more clock than quick play in the final third.
    pockets of space but stay onside. Defenders blend zonal cover with goal-side
    marking, and the nearest defender steps up to contain the ball carrier.
    Movement per beat is capped by pace, so a team caught upfield after losing the
-   ball really is out of shape.
+   ball really is out of shape. A **run** called when the last beat ended with a
+   touch is made here: the runner skips the search for space, heads for the run's
+   spot (in behind: the offside line, in the widest gap near him; overlap: 9 m beyond
+   the carrier and 7 m outside him; short: 10 m from the carrier, as far from
+   opponents as possible) and covers 1.25 times the usual distance. Defenders move
+   first, so the run is made after their shape step but before their decision.
 2. **Defensive decision (the side without the ball).** It may choose any of:
    - **Press**: one player closes the carrier down to about 1.5 m. This puts
      pressure on every option the carrier has, but leaves that player's zone empty.
@@ -176,6 +181,10 @@ the odds you see are the real odds.
   his position does. He's left out of the interception list for balls to anyone else (unless his man
   has the ball). On a later beat he moves after his man does, so he's within 2.2 m about
   47% of the time (60 matches); moving with the other defenders, before the attackers, it was 14%.
+- **Runs**: a through ball to a player who made a run in behind in this beat's shape step gets a 0.25 s
+  head start (his running time, floor 0) in the beat's first action, not in first-time play. It only matters when he,
+  not the ball, is the slower to the spot: in about a quarter of such through balls. Nothing else changes, so a run the
+  defence marks is a decoy.
 - **Trap**: a defender who stepped up needs 0.4 s longer to chase a through ball that beat. If a through ball or
   lob is completed beyond him, he's caught upfield like a bypassed presser.
 - A player who loses a tackle, or is tackled, is down for a beat.
@@ -211,6 +220,11 @@ the odds you see are the real odds.
   winning the ball or settles and lets both teams reorganise.
 - **Quick play**: the CPU plays first-time only when its best first-time option beats
   the value of settling on the ball.
+- **Runs**: when it takes a touch the CPU calls a run by a fixed rule, with no look-ahead
+  (the shape step that makes the run draws random numbers): short with the nearest
+  teammate when pressed with no pass over 80%; else in behind with the forward who has
+  most space behind the line (at least 8 m); else, when wide past halfway, an overlap
+  by the nearest teammate behind the ball.
 - **Difficulty**: Easy gives the CPU −7 to all attributes and much noisier choices
   (softmax temperature 0.028). Normal gives ±0 and 0.011. Hard gives +4 and 0.006.
 
@@ -283,8 +297,6 @@ The engine, AI and commentary don't know about screens. All of this is in
 Proposed after the mobile release. Counter-attacks and line height came from the same
 list and were built in devlog cycle 5.
 
-- **Teammate runs:** tell one teammate to run in behind, overlap or drop short, taking
-  effect on the next beat. The biggest change: it touches shape, the AI and the UI.
 - **A CPU that plans for dribbles** (jockeying itself is part of Cover).
 - **Set-piece choices:** short, near-post or far-post corners; short or long goal kicks.
 - **Half-time changes:** one decision on formation or attitude.

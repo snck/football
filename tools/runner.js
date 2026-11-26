@@ -35,7 +35,12 @@ function playBeat(m, policy = {}) {
       const ctr = FB.isCounter(m);
       let q;
       if (policy.quick && policy.quick[t2]) { m.quick++; q = policy.quick[t2](m); m.quick--; } else q = FB.AI.chooseQuick(m);
-      if (!q) { if (ctr) counts.counterDeclined = (counts.counterDeclined || 0) + 1; break; }
+      if (!q) { // took a touch: maybe call a run for the next beat
+        if (ctr) counts.counterDeclined = (counts.counterDeclined || 0) + 1;
+        const run = (policy.run && policy.run[t2]) ? policy.run[t2](m) : FB.AI.chooseRun(m);
+        if (run && FB.orderRun(m, t2, run)) counts['run_' + run.kind] = (counts['run_' + run.kind] || 0) + 1;
+        break;
+      }
       FB.startQuick(m);
       const res = FB.resolveAttack(m, q);
       const pre = ctr ? 'r_c' : 'r_q';

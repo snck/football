@@ -14,8 +14,8 @@ when the cycle is done.
 | 2 | Re-tune Redmoor and the High line | **done** (user approved react 0.5, Redmoor 73) |
 | 3 | A. Cover / jockey | **done** (user dropped the chain-share target, see "Phase 3 result") |
 | 4 | B. Lasting marks, costlier trap | **done** (mark target missed, user accepted it, see "Phase 4 result") |
-| 5 | C. Teammate runs | todo, **next** |
-| 6 | D. Through balls (variety only; may be dropped after 3–5) | todo |
+| 5 | C. Teammate runs | **built, waiting for the user's decision** (run target missed, see "Phase 5 result") |
+| 6 | D. Through balls (variety only; may be dropped after 3–5) | todo, next once phase 5 is decided |
 | 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo |
 | 8 | Final docs, full balance pass, ask about publishing | todo |
 
@@ -57,7 +57,9 @@ Standing rules:
 | 975, 976, 977, 978 ×10⁶ | phase 3 hold-out |
 | 980, 981, 982, 983, 984 ×10⁶ | phase 4 tuning |
 | 985 (policies), 986 (diag), 987 (mirror), 988 (balance) ×10⁶; sim 44 | phase 4 hold-out, both engines |
-| **990… (×10⁶) unused** | reserved: phase 5 (first half tuning, +5,000,000 hold-out) |
+| 990, 991 ×10⁶ | phase 5 tuning |
+| 995 (policies), 996 (diag) ×10⁶; sim 44 again | phase 5 hold-out, both engines |
+| **1000000000+ unused** | |
 
 ### Tools added for this cycle
 
@@ -418,6 +420,54 @@ Accept: "always take a touch" + `chooseRun` beats plain "always take a touch" by
 goals/team 1.10–1.40; no "run behind every time" habit at or above the CPU; timing at most 19.5 min (add 1 s for a
 share of touches to `timing.js`).
 
+### Phase 5 result (2026-11-26)
+
+Built as specified, with these details:
+- The runner is left out of the box runs, the search for space and the short-outlet rule, then sent to the run's spot (`runSpot` in `engine.js`,
+  no RNG, also used by the UI preview as `FB.runTarget`). Defenders still move first, so the run is made after their step and before their decision.
+- The head start counts only in the **first action of the beat** (not first-time play). `m.runMade` holds the run for the beat (display and head start);
+  `m.runs` is cleared in `startBeat` and on turnovers and restarts. Neither is touched by a hypothetical plan, so nothing new in the snapshot.
+- `AI.chooseRun` order: short (pressed above 0.5 and no pass over 0.8), behind (a forward within 15 m of the line with at least 8 m of space
+  10 m beyond it, and 8 m between line and goal), overlap (carrier past halfway and over 18 m from the centre, nearest teammate behind the ball on that side).
+  Thresholds in `FB.AI.RUN`. It calls about 22 runs a match in CPU v CPU, 19.6 of them in behind.
+- UI: a `Run` row only during a first-time chance (desktop text "Run when you take a touch:", keys B/O/S, then click the runner; touch: tap kind,
+  tap runner). Yellow dotted arrow to the projected spot; the made run is drawn faintly next beat; the defending human sees the CPU's run in orange and a
+  "Their run" line. On a phone the first-time rule moved from the row into the preview box so the row fits on one line (portrait side panel 246 against 221 px,
+  as in phases 3–4). `timing.js` adds 1 s when a human calls a run.
+
+Hold-out, 4,000 matches per row (995000000, ±0.04; "before" is the phase 4 engine on the same seeds):
+
+| | Before | After |
+|---|---|---|
+| CPU brain | 1.36 | 1.36 |
+| always take a touch (no runs) | 0.92 | 0.92 |
+| touch + CPU runs | | 0.94 |
+| touch + run behind (furthest-forward teammate) | | 0.95 |
+| CPU brain, no runs | | 1.35 |
+| run behind every time / come short every time / overlap every time | | 1.39 / 1.31 / 1.34 |
+| greedy attack | 1.87 | 1.94 |
+
+| Target | Result | |
+|---|---|---|
+| touch + chooseRun at least 0.15 over touch | **+0.02 ±0.06** | **missed** |
+| CPU v CPU goals/team 1.10–1.40 | `sim 1000 44` 1.26 (1.23 before); `sim 300 11` 1.26 (1.27) | met |
+| No "run behind every time" habit at or above the CPU | **1.39 against 1.36** (+0.03 ±0.06, can't be told apart) | **missed on the point estimate** |
+| Timing ≤ 19.5 min | 18.4 (18.4 before) | met |
+
+`exploits 300 normal`: thoughtful 181-62-57, shoot on sight 87-69-144, dribble only 89-79-132, hoof 36-95-169, safest pass 0-138-162, park the bus 40-56-204,
+always tackle/press 88-63-149, high line + trap 67-56-177: every one-note script still loses. Engine tests 41 → 46.
+`diag.js 1000 996000000`: 2.54 goals/match, first-time chain 49.0% of goals, corner direct 15.4% (8.8% of corners); calibration within 0.9 points everywhere
+(through 65.3/65.5, pass 79.6/79.6, shot 14.0/14.0). Action mix: **through 36.1%**, pass 21.1%, lob 17.6%, dribble 16.0%, shoot 9.0%, so phase 6's check
+(stop if through is under 30%) says go ahead.
+
+**Why runs do so little (measured, tuning seeds):** the head start only matters when the runner, not the ball, is the slower to the spot: 26% of through
+balls open to the runner, and it adds 0.2 percentage points to their success on average (200 matches). The CPU's attack picks a through ball to the runner
+1.7 times a match, though one is available 16 times. Bigger or different head starts, 2,000 matches each on 991000000 (touch + CPU runs / touch + run behind;
+plain touch 0.91): spec 0.25 s 0.91 / 0.95; 0.25 s against the chaser instead of the runner's time 0.93 / 0.95; 0.5 s against the chaser 0.89 / 0.97; 0.6 s
+off the runner's time 0.92 / 0.96; **1 s against the chaser 0.92 / 1.00**. So even an implausible head start gives about +0.09 for the best habit and nothing
+for the CPU's own choice: the head start is not the lever. Taking a touch gives the defence a reset (a shape step and a decision that sees the run, so it
+can mark the runner or trap him), and that costs more than a run gains.
+
 ## Phase 6: D. Through balls (check first)
 
 A variety problem (35.7% of actions, 43.3% in midfield), not an exploit: the habit is already 0.29 below greedy. Run
@@ -502,3 +552,7 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   The row with the extra button first pushed Confirm off a portrait phone, so touch uses short labels while a mark stands (panel height 246 px again, as in phase 3).
   DEVLOG entry waits for phase 8; DESIGN, README, how-to text and CLAUDE.md are current.
 - 2026-11-25: the user accepted the mark result (press + a new mark every turn stays worth more than pressing alone). Phase 4 closed; documentation only, no game code changed.
+- 2026-11-26: phase 5, see "Phase 5 result" above. The user asked for the next phase. Checked with a script driving headless Chrome (desktop, 375×667,
+  667×375): calling a run by key and by button, switching kind, the click on the runner, delivery on Take a touch, the head-start line, the CPU's run in the
+  defence panel; no console errors. DESIGN, README, how-to text and CLAUDE.md are current; DEVLOG entry waits for phase 8. Waiting for the user to decide
+  on the missed targets before phase 6.

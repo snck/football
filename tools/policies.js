@@ -33,6 +33,17 @@ function first(m, type) {
   if (!type || l[0].a.type === 'shoot') return l[0].a;
   return (l.find((x) => x.a.type === type) || l[0]).a;
 }
+/** The same run every time a touch is taken: behind = the furthest-forward teammate, short = the nearest, overlap = the nearest behind the ball. */
+function runHabit(kind) {
+  return (m) => {
+    const c = FB.carrier(m), t = c.team;
+    let mates = FB.active(m, t).filter((p) => p !== c && p.role !== 'GK');
+    if (kind === 'overlap') mates = mates.filter((p) => FB.rel(t, p).x < FB.rel(t, c).x);
+    const key = kind === 'behind' ? (p) => -FB.rel(t, p).x : (p) => FB.dist(p, c);
+    const p = mates.sort((a, b) => key(a) - key(b))[0];
+    return p ? { id: p.id, kind } : null;
+  };
+}
 const P = {
   'baseline (CPU brain)': {},
   'hold shape always': { defense: () => ({}) },
@@ -53,7 +64,14 @@ const P = {
   'pass first': { attack: (m) => first(m, 'pass') },
   'lob first': { attack: (m) => first(m, 'lob') },
   'dribble first': { attack: (m) => first(m, 'dribble') },
-  'always take a touch': { quick: () => null },
+  'always take a touch': { quick: () => null, run: () => null },
+  // runs are called when taking a touch; 'no runs' is the CPU brain without them
+  'touch + CPU runs': { quick: () => null },
+  'touch + run behind': { quick: () => null, run: runHabit('behind') },
+  'no runs': { run: () => null },
+  'run behind every time': { run: runHabit('behind') },
+  'come short every time': { run: runHabit('short') },
+  'overlap every time': { run: runHabit('overlap') },
 };
 if (!isMainThread) {
   work(({ from, to, name, seed }) => {

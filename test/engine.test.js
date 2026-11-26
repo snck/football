@@ -537,6 +537,109 @@ test('trap: a through ball or lob completed beyond the line leaves it caught upf
   assert.deepEqual(run({ type: 'lob', target: { x: 80, y: 32 } }, { trap: true }, { x: 69, y: 31 }), ['ok', 1]);
 });
 
+/** A real open-play position with team 0 on the ball (seeded), for the run tests. */
+function runStage(seed = 5) {
+  const m = fresh(seed);
+  for (let i = 0; i < 400 && !(m.poss === 0 && m.carrier != null && !m.restart && !m.over && FB.rel(0, FB.carrier(m)).x > 40 && FB.rel(0, FB.carrier(m)).x < 70); i++) playBeat(m);
+  assert.ok(m.poss === 0 && !m.restart, 'found a position');
+  return m;
+}
+const forward = (m) => FB.active(m, 0).filter((p) => p.id !== m.carrier && p.role === 'FW')[0];
+
+test('runs: only a teammate of the player on the ball, never the keeper or the carrier, only known kinds', () => {
+  const m = runStage(), f = forward(m), gk = FB.active(m, 0).find((p) => p.role === 'GK');
+  for (const [team, run] of [[0, { id: gk.id, kind: 'behind' }], [0, { id: m.carrier, kind: 'short' }], [0, { id: f.id, kind: 'dash' }],
+    [1, { id: 20, kind: 'behind' }], [0, { id: 20, kind: 'behind' }], [0, null]]) {
+    assert.equal(FB.orderRun(m, team, run), false, JSON.stringify(run));
+  }
+  assert.deepEqual(m.runs, [null, null]);
+  m.restart = { type: 'throwin', team: 0, pos: { x: 50, y: 0.3 } };
+  assert.equal(FB.orderRun(m, 0, { id: f.id, kind: 'behind' }), false, 'not with a restart to come');
+  m.restart = null;
+  assert.equal(FB.orderRun(m, 0, { id: f.id, kind: 'behind' }), true);
+  assert.deepEqual(m.runs[0], { id: f.id, kind: 'behind' });
+});
+
+test('runs: made in the next shape step, before the defence decides, at 1.25 times the usual distance; a run in behind stays onside', () => {
+  for (const seed of [5, 6, 7, 8]) {
+    const m = runStage(seed), f = forward(m), from = { x: f.x, y: f.y };
+    FB.orderRun(m, 0, { id: f.id, kind: 'behind' });
+    const s = FB.startBeat(m);
+    assert.ok(!m.restart && s.needDefense, 'the defence still has its turn');
+    assert.deepEqual(m.runs, [null, null], 'used up');
+    assert.equal(m.runMade.id, f.id);
+    assert.deepEqual(m.runMade.from, from);
+    const moved = FB.dist(from, f), max = FB.speed(f) * FB.TUNE.shapeSecs * FB.TUNE.runBoost * (f.recover > 0 ? 0.5 : 1);
+    assert.ok(moved <= max + 1e-9);
+    assert.ok(FB.offsideProb(m, f) < 0.5, 'onside');
+    assert.ok(s.tl[0].moves[f.id]);
+  }
+  const m = runStage();
+  FB.startBeat(m);
+  assert.equal(m.runMade, null, 'no run called, none made');
+});
+
+test('runs: each kind goes where it says, with no RNG', () => {
+  const m = runStage(), c = FB.carrier(m), f = forward(m), cr = FB.rel(0, c);
+  const back = FB.active(m, 0).filter((p) => p !== c && p.role === 'DF')[0];
+  const r0 = m.rng; m.rng = () => { throw new Error('no RNG'); };
+  const behindT = FB.rel(0, FB.runTarget(m, 0, { id: f.id, kind: 'behind' }));
+  const ov = FB.rel(0, FB.runTarget(m, 0, { id: back.id, kind: 'overlap' }));
+  const sh = FB.runTarget(m, 0, { id: back.id, kind: 'short' });
+  const ai = FB.AI.chooseRun(m);
+  m.rng = r0;
+  const lim = Math.max(FB.rel(0, { x: FB.offsideLine(m, 0), y: 0 }).x, cr.x) - 0.5;
+  assert.ok(Math.abs(behindT.x - Math.min(lim, 104.5)) < 1e-9, 'up to the offside limit');
+  assert.ok(ov.x > cr.x && Math.abs(ov.y - 34) >= Math.min(Math.abs(cr.y - 34), 31) - 1e-9, 'beyond and outside the carrier');
+  assert.ok(Math.abs(FB.dist(sh, c) - 10) < 1e-6, 'short: 10 m from the carrier');
+  assert.equal(FB.runTarget(m, 1, { id: 20, kind: 'short' }), null, 'only for the side on the ball');
+  if (ai) assert.ok(FB.orderRun(m, 0, ai), 'the CPU calls valid runs');
+});
+
+test('runs: a run in behind gives a head start on a through ball to that runner, in the first action only, and shows it', () => {
+  const m = runStage(), f = forward(m);
+  FB.orderRun(m, 0, { id: f.id, kind: 'behind' });
+  FB.startBeat(m);
+  const T = { x: f.x + 8, y: f.y };
+  const a = { type: 'through', target: T, runner: f.id };
+  const ev = FB.evaluate(m, a);
+  assert.ok(ev.valid);
+  assert.equal(ev.runStart, FB.TUNE.runStart);
+  assert.ok(Math.abs(sumP(ev) - 1) < 1e-9);
+  const made = m.runMade;
+  m.runMade = null;
+  const plain = FB.evaluate(m, a);
+  assert.equal(plain.runStart, 0);
+  assert.ok(Math.abs(plain.runT - ev.runT - FB.TUNE.runStart) < 1e-9 || ev.runT === 0);
+  assert.ok(ev.p >= plain.p);
+  m.runMade = made;
+  m.quick = 1;
+  assert.equal(FB.evaluate(m, a).runStart, 0, 'not on a first-time ball');
+  m.quick = 0;
+  m.runMade = Object.assign({}, made, { kind: 'short' });
+  assert.equal(FB.evaluate(m, a).runStart, 0, 'only a run in behind');
+});
+
+test('runs: cancelled by a turnover or a restart', () => {
+  let m = runStage(), f = forward(m);
+  FB.orderRun(m, 0, { id: f.id, kind: 'behind' });
+  m.restart = { type: 'throwin', team: 0, pos: { x: 50, y: 0.3 } };
+  FB.startBeat(m);
+  assert.equal(m.runMade, null);
+  assert.deepEqual(m.runs, [null, null]);
+  m = runStage(); f = forward(m);
+  FB.orderRun(m, 0, { id: f.id, kind: 'behind' });
+  FB.startBeat(m);
+  assert.ok(m.runMade);
+  const c = FB.carrier(m);
+  const d = FB.active(m, 1).filter((p) => p.role !== 'GK').sort((a, b) => FB.dist(a, c) - FB.dist(b, c))[0];
+  Object.assign(d, { x: c.x + 0.5, y: c.y });
+  m.rng = () => 0; // the tackle is won
+  FB.applyDefense(m, { tackle: d.id });
+  assert.equal(m.poss, 1);
+  assert.equal(m.runMade, null, 'gone with the ball');
+});
+
 test('dribble: a better dribbler takes fewer heavy touches', () => {
   const m = fresh(4); clearPitch(m); give(m, 7, 50, 34);
   const at = (d) => { m.players[7].attrs.dribble = d; return FB.evaluate(m, { type: 'dribble', target: { x: 58, y: 34 } }).lose; };

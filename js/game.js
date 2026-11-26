@@ -19,7 +19,7 @@
   };
 
   const UI = {
-    m: null, R: null, wait: null, mode: 'pass', sel: null, hover: null, hoverPt: null, plan: {}, markFrom: null,
+    m: null, R: null, wait: null, mode: 'pass', sel: null, hover: null, hoverPt: null, plan: {}, markFrom: null, run: null, runKind: null,
     phase: 'menu', quick: false, feedIdx: 0, badges: null, threat: null, rec: [], cur: null, started: 0,
     opts: { team: store.get('team', 0), opp: store.get('opp', 1), diff: store.get('diff', 'normal'), len: store.get('len', 'normal') },
     speed: store.get('speed', 1), sound: store.get('sound', true), paused: false,
@@ -156,7 +156,7 @@
         if (!first) { FB.startQuick(m); flushFeed(); } // enter first-time mode before showing options/odds
         a = await humanAttack(!first);
         if (token !== loopToken) return;
-        if (!a) return; // took a touch
+        if (!a) { if (UI.run) FB.orderRun(m, HUMAN, UI.run); UI.run = null; UI.runKind = null; return; } // took a touch
       } else {
         const ctr = !first && FB.isCounter(m);
         setPhase(first ? 'CPU in possession…' : ctr ? 'CPU won the ball. Counter-attack?' : 'CPU plays it quick…', 'wait');
@@ -165,7 +165,7 @@
         setButtons(null, null);
         await sleep(first ? 380 : 220);
         a = first ? FB.AI.chooseAttack(m) : FB.AI.chooseQuick(m);
-        if (!a) return;
+        if (!a) { const run = FB.AI.chooseRun(m); if (run) FB.orderRun(m, m.poss, run); return; } // took a touch
       }
       if (!first && m.poss !== HUMAN) { FB.startQuick(m); flushFeed(); }
       const res = FB.resolveAttack(m, a);
@@ -220,9 +220,13 @@
       b.dataset.mode = k;
       modes.appendChild(b);
     }
-    $('extra').innerHTML = counter ? `<span>You won it! Break before they regroup: first-time rules (−5% accuracy, no dribbling). ${tx('<b>Space</b> = take a touch instead.', 'Tap <b>Take a touch</b> to settle instead.')}</span>`
-      : quick ? `<span>Playing first-time: −5% accuracy, no dribbling. ${tx('<b>Space</b> = take a touch instead.', 'Tap <b>Take a touch</b> to settle instead.')}</span>`
+    UI.run = null; UI.runKind = null;
+    // on a phone the first-time rule goes in the preview box instead, so the run row fits on one line
+    $('extra').innerHTML = isTouch() && quick ? ''
+      : counter ? '<span>You won it! Break before they regroup: first-time rules (−5% accuracy, no dribbling). <b>Space</b> = take a touch instead.</span>'
+      : quick ? '<span>Playing first-time: −5% accuracy, no dribbling. <b>Space</b> = take a touch instead.</span>'
       : (UI.cpuPlanText ? `<span>Opponent: ${UI.cpuPlanText}</span>` : '');
+    if (quick) buildRunRow();
     setMode(UI.mode, true);
     hint(counter ? tx('Counter-attack: their players are still upfield. Play it now, or press Space / "Take a touch" to settle (they get to regroup).',
       'Counter-attack: their players are still upfield. Play it now, or tap "Take a touch" to settle (they get to regroup).')
@@ -231,6 +235,47 @@
       : tx('Hover to preview, click to select, click again or Enter to commit. Number keys switch action.',
         'Tap to select and see the odds, then tap again or press Commit. The buttons switch action.'));
     return new Promise((resolve) => { UI.wait = { kind: 'attack', resolve }; });
+  }
+
+  // ------------------------------------------------------------------ runs (called when taking a touch)
+  const RUNS = [['behind', 'B', 'In behind'], ['overlap', 'O', 'Overlap'], ['short', 'S', 'Come short']];
+  const RUN_TXT = { behind: 'runs in behind', overlap: 'overlaps', short: 'comes short' };
+  function buildRunRow() {
+    const ex = $('extra');
+    const row = document.createElement('span'); row.className = 'seg'; row.id = 'runSeg';
+    ex.appendChild(document.createTextNode(tx('Run when you take a touch:', 'Run:')));
+    for (const [k, key, label] of RUNS) {
+      const b = document.createElement('button');
+      b.innerHTML = `<kbd>${key}</kbd>${isTouch() && k === 'short' ? 'Short' : label}`;
+      b.dataset.run = k;
+      b.onclick = () => setRunKind(k);
+      row.appendChild(b);
+    }
+    ex.appendChild(row);
+    const info = document.createElement('span'); info.id = 'runInfo'; ex.appendChild(info);
+    refreshRunRow();
+  }
+  function refreshRunRow() {
+    const row = $('runSeg'); if (!row) return;
+    const on = UI.runKind || (UI.run && UI.run.kind);
+    [...row.children].forEach((b) => b.classList.toggle('on', b.dataset.run === on));
+    $('runInfo').innerHTML = UI.runKind ? `${tx('Click', 'Tap')} the runner` : UI.run ? `${nm(UI.run.id)} ${RUN_TXT[UI.run.kind]}` : '';
+  }
+  /** Pick a kind of run, then the teammate (picking the same kind again cancels). */
+  function setRunKind(k) {
+    if (!UI.quick || !UI.wait || UI.wait.kind !== 'attack') return;
+    if (UI.runKind === k || !UI.runKind && UI.run && UI.run.kind === k) { UI.runKind = null; UI.run = null; }
+    else { UI.runKind = k; if (UI.run) UI.run = { id: UI.run.id, kind: k }; }
+    refreshRunRow();
+    window.Sound.play('click');
+  }
+  const canRun = (id) => id != null && UI.m.players[id].team === HUMAN && id !== UI.m.carrier && UI.m.players[id].role !== 'GK';
+  function pickRunner(id) {
+    if (!canRun(id)) { flashHint('Pick a teammate to make the run (not the keeper).'); return; }
+    UI.run = { id, kind: UI.runKind }; UI.runKind = null;
+    refreshRunRow();
+    flashHint(`${nm(id)} ${RUN_TXT[UI.run.kind]} if you take a touch${tx('. Space to go with it, or play first-time and forget it.', '.')}`);
+    window.Sound.play('click');
   }
 
   function setMode(k, silent) {
@@ -318,6 +363,7 @@
       lines.push(`Race: ${nm(ev.runner)} ${ev.runT.toFixed(1)}s vs ${ev.chaser != null ? nm(ev.chaser) : 'nobody'} ${ev.defT < 50 ? ev.defT.toFixed(1) + 's' : ''} → wins ${pct(ev.pRace)}`);
       lines.push(`Accuracy ${pct(ev.exec)} · lane ${ev.lane.p > 0.03 ? pct(ev.lane.p) + ' intercept risk' : 'clear'}`);
       if (ev.trapReact) lines.push(`${nm(ev.chaser)} stepped up for the trap: +${ev.trapReact}s to turn`);
+      if (ev.runStart) lines.push(`${nm(ev.runner)} is already running in behind: ${ev.runStart}s head start`);
       const tr = FB.rel(HUMAN, ev.target);
       if (tr.x > 85) lines.push('Gets in behind — big chance if it comes off');
     } else if (a.type === 'lob') {
@@ -387,7 +433,8 @@
       UI.prevAction = a;
       UI.prevEval = a ? FB.evaluate(m, a) : null;
       if (!a) {
-        $('preview').innerHTML = `<div class="lbl">${labelOf({ type: UI.mode })}</div><div class="muted">${modeHelp(UI.mode)}</div>`;
+        const rule = UI.quick ? `<div>${FB.isCounter(UI.m) ? 'Counter-attack' : 'First-time'}: −5% accuracy, no dribbling.</div>` : '';
+        $('preview').innerHTML = `<div class="lbl">${labelOf({ type: UI.mode })}</div>${rule}<div class="muted">${modeHelp(UI.mode)}</div>`;
       } else $('preview').innerHTML = (UI.sel ? `<div class="lbl" style="color:#4fc3f7">${tx('Selected — click again or Enter', 'Selected — tap again or press Commit')}</div>` : '') + describeAction(a, UI.prevEval);
       setButtons(UI.sel && UI.prevEval && UI.prevEval.valid ? `Commit ${labelOf(UI.sel)} (Enter)` : 'Select an action first',
         UI.quick ? 'Take a touch (Space)' : canCancel() && isTouch() ? 'Cancel' : null);
@@ -498,6 +545,8 @@
     if (P.mark) lines.push(`<b>Mark:</b> ${nm(P.mark.d)} tight on ${nm(P.mark.a)}, and follows him for ${turns(FB.TUNE.markBeats)}, until you win the ball or play stops. Passes to him get much harder, but ${nm(P.mark.d)} leaves his zone and won't cut out balls to anyone else.`);
     const lm = liveMarkText();
     if (lm) lines.push(`<b>Standing mark:</b> ${lm}`);
+    const rm = m.runMade;
+    if (rm && rm.team !== HUMAN) lines.push(`<b>Their run:</b> ${nm(rm.id)} ${RUN_TXT[rm.kind]}${rm.kind === 'behind' ? `. A through ball to him now gets a ${FB.TUNE.runStart}s head start, unless you mark him or catch him offside` : ''}.`);
     if (UI.markFrom != null) lines.push(`<i>${nm(UI.markFrom)} selected. Now click the opponent to mark.</i>`);
     if (P.trap) lines.push('<b>Offside trap:</b> the back line steps up 4 m. Runners on the line are caught, but whoever steps up needs ' + FB.TUNE.trapReact + 's longer to chase a ball in behind, and is slow next turn if a through ball or lob beats him.');
     lines.push(`<b>Line:</b> ${LINE_TXT[P.line] || P.line}`);
@@ -804,6 +853,9 @@
     const m = UI.m; if (!c) return;
     const cd = R.disp[c.id];
     if (m.cover && !m.cover.used) drawSlide(ctx, R, m.cover.id);
+    if (UI.quick && UI.runKind) for (const p of FB.active(m, HUMAN)) if (canRun(p.id)) ring(ctx, R, p.id, 'rgba(255,245,157,0.8)', 1.6);
+    if (UI.quick && UI.run) { const T = FB.runTarget(m, HUMAN, UI.run); if (T) { arrow(ctx, R, R.disp[UI.run.id], T, '#fff59d', [3, 4], 2); ring(ctx, R, UI.run.id, '#fff59d', 1.7); } }
+    drawRunMade(ctx, R);
     if (UI.mode === 'dribble') {
       ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(R.px(cd.x), R.py(cd.y), FB.dribbleMax(c) * R.s, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
@@ -833,6 +885,12 @@
     } else if (a.type === 'clear') { arrow(ctx, R, cd, ev.target, 'rgba(255,255,255,0.5)', [10, 8]); }
     for (const id of ev.threats || []) ring(ctx, R, id, '#ef5350', 1.9);
   }
+  /** The run made in this beat's shape step, faint, from where it started. */
+  function drawRunMade(ctx, R) {
+    const r = UI.m.runMade;
+    if (!r || UI.phase === 'attack' && UI.quick) return;
+    arrow(ctx, R, r.from, R.disp[r.id], r.team === HUMAN ? 'rgba(255,245,157,0.6)' : 'rgba(255,171,145,0.85)', [3, 4], 2);
+  }
   function drawCircle(ctx, R, p, r, color) { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(R.px(p.x), R.py(p.y), r * R.s, 0, Math.PI * 2); ctx.stroke(); }
   /** How far the covering player may slide to the next receiver. */
   function drawSlide(ctx, R, id) {
@@ -850,6 +908,7 @@
     ctx.strokeStyle = small ? 'rgba(255,138,101,0.9)' : 'rgba(255,138,101,0.3)';
     ctx.beginPath(); ctx.arc(R.px(cd.x), R.py(cd.y), FB.TUNE.tackleRange * R.s, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
+    drawRunMade(ctx, R);
     const o = UI.opts_def || { press: [], tackle: [], cover: [] };
     const elig = UI.dmode === 'mark' ? [] : o[UI.dmode];
     for (const id of elig) ring(ctx, R, id, 'rgba(129,212,250,0.9)', 1.6);
@@ -906,6 +965,7 @@
     const pt = UI.R.toPitch(e);
     const id = nearestPlayer(pt, pickRadius());
     if (UI.wait.kind === 'attack') {
+      if (UI.runKind) { pickRunner(id); return; }
       if (UI.mode === 'shoot' || UI.mode === 'clear') { commitAttack({ type: UI.mode }); return; }
       const a = candidateAt(pt, id);
       if (!a) return;
@@ -923,6 +983,7 @@
     if (!$('help').classList.contains('hidden')) { if (k === 'Escape' || k === 'Enter' || k === 'h' || k === 'H') closeHelp(); return; }
     if (UI.phase === 'menu') { if (k === 'Enter') startMatch(); return; }
     if (k === 'Escape') {
+      if (UI.wait && UI.wait.kind === 'attack' && UI.runKind) { UI.runKind = null; refreshRunRow(); return; }
       if (UI.wait && UI.wait.kind === 'attack' && canCancel()) { cancelSel(); return; }
       if (UI.wait && UI.wait.kind === 'defend' && UI.markFrom != null) { UI.markFrom = null; refreshPreview(); return; }
       togglePause(); return;
@@ -933,6 +994,8 @@
     if (w.kind === 'attack') {
       const md = MODES.find((x) => x[1] === k);
       if (md) { setMode(md[0]); return; }
+      const rk = RUNS.find((x) => x[1] === k.toUpperCase());
+      if (rk && UI.quick) { setRunKind(rk[0]); return; }
       if (k === 'Enter') { const a = UI.sel || UI.prevAction; if (a) commitAttack(a); e.preventDefault(); return; }
       if (k === ' ') { settleQuick(); e.preventDefault(); return; }
     } else if (w.kind === 'defend') {

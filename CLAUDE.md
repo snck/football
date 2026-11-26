@@ -35,7 +35,7 @@ Every file in `js/` is a plain-script IIFE attaching to a global `FB` (`window` 
 1. `FB.startBeat`: shape step, or restart setup. Returns `needDefense` and `penalty`.
 2. `FB.applyDefense` if needed. It may end the beat (tackle won, or foul).
 3. `FB.resolveAttack`.
-4. While `FB.canQuick(m)`: optionally `FB.startQuick`, then `resolveAttack` again. This covers both first-time play after a completed pass and counter-attacks (`FB.isCounter`).
+4. While `FB.canQuick(m)`: optionally `FB.startQuick`, then `resolveAttack` again. This covers both first-time play after a completed pass and counter-attacks (`FB.isCounter`). Declining (taking a touch) may call a run for the next beat: `FB.orderRun(m, team, run)` (the CPU's is `AI.chooseRun`).
 5. `FB.endBeat`: advances the clock and returns events (`goal`, `halftime`, `fulltime`, `added`).
 
 Three places implement this loop and must stay in step: `beat`/`attackPhase` in `js/game.js`, `playBeat` in `tools/runner.js`, and `tools/timing.js`. Quick and counter options must be evaluated with the first-time penalty on (`m.quick` incremented, by `startQuick` or temporarily as in `AI.chooseQuick` and `runner.js`). This was wrong once in the UI and once in the test harness (DEVLOG cycles 2 and 3).

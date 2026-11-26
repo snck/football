@@ -141,10 +141,14 @@
    */
   const PLAN = { cover: 0.002, mark: 0.001 };
 
+  /** chooseRun's thresholds: best pass chance that still counts as "no safe pass", metres of space a forward needs behind the line
+   * (and between the line and the goal), and how far from the centre a carrier counts as wide. */
+  const RUN = { safePass: 0.8, room: 8, depth: 8, wide: 18 };
+
   const pickSide = (m, mix) => { const r = m.rng(); return r < mix.L ? 'L' : r < mix.L + mix.R ? 'R' : 'C'; };
 
   FB.AI = {
-    V, candidates, scored, evOf, context, PLAN,
+    V, candidates, scored, evOf, context, PLAN, RUN,
     chooseAttack(m) {
       const t = FB.carrier(m).team;
       const list = scored(m);
@@ -165,6 +169,45 @@
       void ctx;
       // only go first-time when it clearly beats settling on the ball
       return pick.v > settle + 0.001 ? pick.a : null;
+    },
+    /**
+     * Which run to call when taking a touch (null for none). A plain rule, with no RNG and no look-ahead (the shape step that
+     * makes the run draws from the RNG): come short when pressed with no safe pass; else send the forward with the most room
+     * behind the line in behind; else, when wide past halfway, overlap with the nearest teammate behind the ball.
+     */
+    chooseRun(m) {
+      const c = FB.carrier(m);
+      if (!c || m.restart) return null;
+      const t = c.team, cr = rel(t, c);
+      const mates = FB.active(m, t).filter((p) => p !== c && p.role !== 'GK');
+      if (!mates.length) return null;
+      if (FB.pressureOn(m, c) > 0.5) {
+        const q = m.quick; m.quick = 0; // the next beat's odds, without the first-time penalty
+        let safe = 0;
+        for (const p of mates) { const ev = FB.evaluate(m, { type: 'pass', to: p.id }); if (ev.valid) safe = Math.max(safe, ev.p); }
+        m.quick = q;
+        if (safe <= RUN.safePass) return { id: mates.slice().sort((a, b) => dist(a, c) - dist(b, c))[0].id, kind: 'short' };
+      }
+      const offL = rel(t, { x: FB.offsideLine(m, t), y: 0 }).x;
+      const opps = FB.active(m, 1 - t).map((o) => rel(t, o));
+      let best = null, room = RUN.room;
+      if (L - 6 - offL > RUN.depth) {
+        for (const p of mates) {
+          const pr = rel(t, p);
+          if (p.role !== 'FW' || pr.x < offL - 15) continue;
+          const q = { x: Math.min(offL + 10, L - 6), y: pr.y };
+          let md = 99;
+          for (const o of opps) md = Math.min(md, Math.hypot(o.x - q.x, o.y - q.y));
+          if (md > room) { room = md; best = p; }
+        }
+      }
+      if (best) return { id: best.id, kind: 'behind' };
+      if (cr.x > L / 2 && Math.abs(cr.y - 34) > RUN.wide) {
+        const side = cr.y < 34 ? -1 : 1;
+        const back = mates.filter((p) => rel(t, p).x < cr.x + 2 && (rel(t, p).y - 34) * side > 0).sort((a, b) => dist(a, c) - dist(b, c));
+        if (back.length && dist(back[0], c) < 25) return { id: back[0].id, kind: 'overlap' };
+      }
+      return null;
     },
     /** Rank attack options for UI hints (top n). */
     topAttacks(m, n) { return scored(m).slice(0, n); },

@@ -2,7 +2,7 @@
 // node tools/timing.js [matches] [length]
 const { FB } = require('./runner');
 const N = +process.argv[2] || 10, len = process.argv[3] || 'normal';
-const THINK = { attack: 7, quick: 4, defend: 4.5, penalty: 6, goal: 3, half: 10 };
+const THINK = { attack: 7, quick: 4, defend: 4.5, penalty: 6, goal: 3, half: 10, run: 1 }; // run: calling a run when taking a touch
 const dur = (tl) => tl.reduce((a, s) => a + (s.dur || 0.3), 0);
 let tot = { anim: 0, think: 0, att: 0, q: 0, def: 0, beats: 0 };
 for (let i = 0; i < N; i++) {
@@ -25,7 +25,8 @@ for (let i = 0; i < N; i++) {
       while (FB.canQuick(m)) { // first-time plays and counter-attacks
         const h = m.poss === 0;
         if (h) { tot.think += THINK.quick; tot.q++; } else tot.anim += 0.22;
-        const q = FB.AI.chooseQuick(m); if (!q) break;
+        const q = FB.AI.chooseQuick(m);
+        if (!q) { const run = FB.AI.chooseRun(m); if (run && FB.orderRun(m, m.poss, run) && h) tot.think += THINK.run; break; }
         FB.startQuick(m); const r = FB.resolveAttack(m, q); tot.anim += dur(r.tl);
       }
     }

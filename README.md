@@ -62,6 +62,15 @@ Click once to preview, then click again (or press `Enter`) to commit. `Esc` canc
 before the defence resets. It's 5% less accurate and you can't dribble. Or press
 `Space` to **take a touch** and let everyone reorganise.
 
+**Runs:** while you have a first-time chance you can call one run for when you take a
+touch: `B` **in behind** (up to the offside line, through the widest gap), `O` **overlap**
+(outside the carrier and 9 m beyond him) or `S` **come short** (10 m from the carrier, in
+the freest space). Press the key (or tap the button), then click the runner. The run is made
+in the next beat, before the defence decides, so they see it and can mark him or step up to
+catch him offside. A through ball to a player who has just run in behind gets a 0.25 s head
+start in that beat's first action, and the preview shows it. Play first-time instead and the
+run is forgotten. The CPU calls runs too: you'll see its arrow when you defend.
+
 **Counter-attack:** when you win the ball with a tackle or an interception, you get
 one first-time move straight away, before the opponent can get back into shape. The
 CPU can counter you the same way, so a pass that gets cut out is costly.

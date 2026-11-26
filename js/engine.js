@@ -25,6 +25,10 @@
     // Cover: stand off the carrier (`coverGap` m goal-side), step across (`coverSlide` m) to whoever receives the next
     // completed ball, and jockey dribblers (longer reach, fewer fouls).
     coverGap: 3.5, coverSlide: 4, jockeyReach: 0.7, jockeyFoul: 0.5,
+    // Teammate runs, called when taking a touch and made in the next shape step: the runner covers `runBoost` times the
+    // usual distance and skips the search for space. A run in behind gives `runStart` s of head start on a through ball to
+    // him in the first action of that beat.
+    runBoost: 1.25, runStart: 0.25, runKinds: ['behind', 'overlap', 'short'],
     // Loose balls: the first to arrive gets it (distance / speed + up to `noise` s of luck, + `down` s if beaten).
     // `reach` fits looseKeep()'s estimate to that race; `scatter` is how far (m) the ball runs loose.
     loose: { noise: 0.9, down: 0.8, reach: 1,
@@ -76,7 +80,7 @@
       players: [], time: 0, half: 1, added: [null, null], score: [0, 0], poss: 0, carrier: null,
       ball: { x: L / 2, y: W / 2 }, restart: null, setPiece: null, lines: [o.home.style.line, o.away.style.line],
       stats: [mkStats(), mkStats()], feed: [], goals: [], beat: 0, over: false, momentum: 0,
-      beaten: new Set(), marks: {}, markOrders: [null, null], trapped: null, cover: null, lastPasser: null, lastTouch: 0, halfEvents: { goals: 0, cards: 0, stops: 0 },
+      beaten: new Set(), marks: {}, markOrders: [null, null], runs: [null, null], runMade: null, trapped: null, cover: null, lastPasser: null, lastTouch: 0, halfEvents: { goals: 0, cards: 0, stops: 0 },
       phase: 'idle', history: [],
     };
     const diffAdj = { easy: -7, normal: 0, hard: 4 }[m.diff] || 0;
@@ -153,6 +157,8 @@
     const b = rel(t, m.ball);
     const line = m.lines[t];
     const out = {};
+    const run = inPoss && m.runs[t] && !P(m, m.runs[t].id).off ? m.runs[t] : null; // a run called by the player on the ball
+    const runId = run ? run.id : -1;
     // CPU teams go hunting for the ball when the opponent keeps it for a long spell
     let hunt = 0;
     if (!inPoss && t !== m.human) {
@@ -188,7 +194,7 @@
       // attack the box: strikers and advanced midfielders make runs into crossing zones
       const s = b.y < 34 ? -1 : 1;
       const zones = [{ x: 99, y: 34 + s * 4 }, { x: 94, y: 34 - s * 1 }, { x: 98, y: 34 - s * 6 }, { x: 87, y: 34 - s * 2 }];
-      const runners = ps.filter((p) => p.id !== m.carrier && (p.role === 'FW' || (p.role === 'MF' && p.u >= 0.45)));
+      const runners = ps.filter((p) => p.id !== m.carrier && p.id !== runId && (p.role === 'FW' || (p.role === 'MF' && p.u >= 0.45)));
       const nZones = b.x > 80 ? 4 : 3;
       const taken = new Set();
       for (const z of zones.slice(0, nZones)) {
@@ -208,7 +214,7 @@
       const lim = Math.max(offL, b.x) - 0.5;
       const oppRel = others.map((o) => rel(t, o));
       for (const p of ps) {
-        if (p.id === m.carrier || p.role === 'GK') continue;
+        if (p.id === m.carrier || p.role === 'GK' || p.id === runId) continue;
         let r = out[p.id];
         if (r.x > lim) r.x = lim;
         // look for a pocket of space near the target
@@ -230,7 +236,7 @@
         const cr = rel(t, c);
         let nearest = null, nd = 1e9;
         for (const p of ps) {
-          if (p.id === m.carrier || p.role === 'GK') continue;
+          if (p.id === m.carrier || p.role === 'GK' || p.id === runId) continue;
           const d = Math.hypot(out[p.id].x - cr.x, out[p.id].y - cr.y);
           if (d < nd) { nd = d; nearest = p; }
         }
@@ -240,6 +246,7 @@
           out[nearest.id] = { x: cr.x + (r.x - cr.x) * k, y: cr.y + (r.y - cr.y) * k };
         }
       }
+      if (run) out[runId] = runSpot(m, t, P(m, runId), run.kind, lim);
     } else {
       // defending: blend zone with goal-side marking
       const atk = others.filter((o) => o.id !== m.carrier && o.role !== 'GK')
@@ -293,6 +300,56 @@
     return res;
   }
 
+  /**
+   * Where a called run goes (team-relative; no RNG, so the UI can preview it). lim is the offside limit.
+   * behind: up to the line through the widest gap near the runner; overlap: outside the carrier and 9 m beyond him;
+   * short: 10 m from the carrier, wherever is furthest from an opponent.
+   */
+  function runSpot(m, t, p, kind, lim) {
+    const cr = rel(t, carrierP(m)), pr = rel(t, p);
+    const opps = active(m, opp(t)).map((o) => ({ o, r: rel(t, o) }));
+    if (kind === 'behind') {
+      const offL = offsideLine(m, t);
+      const ys = opps.filter((x) => x.o.role !== 'GK' && x.r.x > offL - 12).map((x) => x.r.y).concat([0, W]).sort((a, b) => a - b);
+      let y = pr.y, bs = -1e9;
+      for (let i = 1; i < ys.length; i++) {
+        const mid = (ys[i] + ys[i - 1]) / 2, s = ys[i] - ys[i - 1] - 0.5 * Math.abs(mid - pr.y);
+        if (s > bs) { bs = s; y = mid; }
+      }
+      return { x: lim, y: clamp(y, 4, W - 4) };
+    }
+    if (kind === 'overlap') {
+      const s = cr.y < W / 2 ? -1 : 1;
+      return { x: Math.min(lim, cr.x + 9), y: clamp(cr.y + s * 7, 3, W - 3) };
+    }
+    let best = { x: Math.min(pr.x, lim), y: pr.y }, bs = -1e9;
+    for (let i = 0; i < 12; i++) {
+      const ang = (i / 12) * Math.PI * 2;
+      const q = { x: cr.x + Math.cos(ang) * 10, y: cr.y + Math.sin(ang) * 10 };
+      if (q.x < 2 || q.x > Math.min(lim, L - 2) || q.y < 2 || q.y > W - 2) continue;
+      let md = 12;
+      for (const x of opps) md = Math.min(md, Math.hypot(x.r.x - q.x, x.r.y - q.y));
+      const s = md - 0.1 * Math.hypot(q.x - pr.x, q.y - pr.y);
+      if (s > bs) { bs = s; best = q; }
+    }
+    return best;
+  }
+  /** Where the run called for team t would head if it were made now (absolute; the real one is worked out after the defence moves). */
+  FB.runTarget = function (m, t, run) {
+    const p = run && P(m, run.id), c = carrierP(m);
+    if (!p || !c || c.team !== t) return null;
+    const lim = Math.max(offsideLine(m, t), rel(t, m.ball).x) - 0.5;
+    return clampPitch(abs(t, runSpot(m, t, p, run.kind, lim)));
+  };
+  /** Call a run for the next beat (when taking a touch). Returns false and changes nothing if it isn't allowed. */
+  FB.orderRun = function (m, team, run) {
+    if (!run || !TUNE.runKinds.includes(run.kind)) return false;
+    const p = P(m, run.id);
+    if (!p || p.team !== team || p.off || p.role === 'GK' || p.id === m.carrier || m.poss !== team || m.carrier == null || m.restart || m.over) return false;
+    m.runs[team] = { id: p.id, kind: run.kind };
+    return true;
+  };
+
   function moveTowards(p, tgt, maxD) {
     const d = dist(p, tgt);
     if (d <= maxD) { p.x = tgt.x; p.y = tgt.y; } else { p.x += ((tgt.x - p.x) / d) * maxD; p.y += ((tgt.y - p.y) / d) * maxD; }
@@ -307,14 +364,20 @@
   function shapeStep(m) {
     const moves = {};
     const def = opp(m.poss);
+    const run = m.runs[m.poss], runner = run && P(m, run.id);
+    const from = runner ? { x: runner.x, y: runner.y } : null;
     for (const t of [def, m.poss]) { // defenders move first; attackers then react onside
       const tg = shapeTargets(m, t);
       for (const id in tg) {
         const p = P(m, +id);
-        const maxD = speed(p) * (t === m.poss ? TUNE.shapeSecs : TUNE.defShapeSecs) * (p.recover > 0 ? 0.5 : 1);
+        const maxD = speed(p) * (t === m.poss ? TUNE.shapeSecs : TUNE.defShapeSecs) * (p.recover > 0 ? 0.5 : 1) * (p === runner ? TUNE.runBoost : 1);
         moveTowards(p, tg[id], maxD);
         moves[id] = { x: p.x, y: p.y };
       }
+    }
+    if (runner && !runner.off && moves[runner.id]) {
+      m.runMade = { id: runner.id, kind: run.kind, team: m.poss, from, to: { x: runner.x, y: runner.y } };
+      say(m, 'run_' + run.kind, { a: ctxP(runner), b: ctxP(carrierP(m)), team: m.poss }, 'quiet');
     }
     const mo = m.markOrders[def];
     if (mo) { // a marker goes where his man went
@@ -500,6 +563,7 @@
   // ------------------------------------------------------------------ beat flow
   FB.startBeat = function (m) {
     m.beat++;
+    m.runMade = null;
     m.beaten.clear();
     if (m.downed != null) { m.beaten.add(m.downed); m.downed = null; }
     m.marks = {};
@@ -528,6 +592,7 @@
       const moves = shapeStep(m);
       tl.push({ dur: 0.6, moves, owner: m.carrier });
     }
+    m.runs = [null, null]; // a called run lasts one shape step (and a restart cancels it)
     m.phase = needDefense ? 'defense' : (m.setPiece && m.setPiece.type === 'penalty' ? 'penalty' : 'attack');
     return { tl, needDefense, penalty: m.phase === 'penalty' };
   };
@@ -876,7 +941,8 @@
       if (dRun > 20) return { valid: false, reason: 'No teammate can reach that space' };
       const offP = offsideProb(m, r);
       const ballT = dP / 18 + 0.1;
-      const runT = dRun / (speed(r) * 1.08);
+      const runStart = m.runMade && m.runMade.kind === 'behind' && m.runMade.id === r.id && !m.quick ? TUNE.runStart : 0;
+      const runT = Math.max(0, dRun / (speed(r) * 1.08) - runStart);
       let defT = 99, chaser = null;
       const lineReact = lineFx(m, opp(c.team)).react;
       for (const o of active(m, opp(c.team))) {
@@ -904,7 +970,7 @@
       outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.throughMiss) });
       outcomes.push({ p: exec * lane.p, k: 'lose', pos: lane.list[0] ? lane.list[0].q : T });
       return { valid: true, type: 'through', p: pSucc, exec, lane, pRace, ctrl, offP, runner: r.id, chaser: chaser && chaser.id,
-        runT, defT, ballT, d: dP, outcomes, target: T, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0,
+        runT, runStart, defT, ballT, d: dP, outcomes, target: T, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0,
         trapReact: chaser && m.trapped && m.trapped.has(chaser.id) ? TUNE.trapReact : 0, threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id).concat(chaser ? [chaser.id] : []) };
     }
     if (a.type === 'lob' || a.type === 'cross') {
@@ -1040,6 +1106,7 @@
     m.cover = null;
     m.trapped = null;
     m.markOrders = [null, null];
+    m.runs = [null, null]; m.runMade = null;
     setCarrier(m, newP);
     if (how === 'intercept') m.stats[newP.team].interceptions++;
     // Winning the ball cleanly in open play (tackle or interception, not the keeper) lets the new
