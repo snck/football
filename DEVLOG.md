@@ -234,7 +234,7 @@ the mobile version without counters and line effects.
 
 ## Cycle 6: mechanics (2026-11-25 to 2026-11-26)
 
-A planned pass over the mechanics, done in eight phases, one commit (or a few) each, on branch `mechanics-6`. Every phase
+A planned pass over the mechanics (the working plan, `PLAN.md`, was folded into this entry and deleted), done in eight phases, one commit (or a few) each, on branch `mechanics-6`. Every phase
 was tuned on one block of seeds and judged on another, with 95% intervals, and compared with the build before it on
 the same seeds. The user decided every missed target; those decisions are recorded below.
 
@@ -439,7 +439,7 @@ produce about half of all goals: the target set for Cover was dropped.
   goals/team 1.291.
 - **Lines**, `mirror.js 16000 1038000000 high normal` and `… 1039000000 deep normal` (±0.04): **High − Normal +0.117**, Deep − Normal **−0.134**.
   On the phase 6 build, same seeds: High +0.061, Deep −0.106 (a change within the error for Deep). So phase 7 probably widened High's lead (by about 0.05, at the edge of the
-  error); the phase 2 target was ±0.05. Not diagnosed or tuned (see Known weaknesses).
+  error); the phase 2 target was ±0.05. Not diagnosed. **Decision (user):** accept High as it is, no re-tune.
 - **Half-time shape** (a scratch mirror tool: same club both sides, one side changes at half-time, the other never does; 8,000 matches,
   ±0.057): 4-3-3 **+0.037** (1040000000), the CPU's rule −0.019 (1041000000). Phase 7's +0.106 from tuning seeds isn't reproduced: switching
   to 4-3-3 is not a dominant choice.
@@ -637,9 +637,6 @@ numbers" for the present build.
 - **Easy rewards shortcuts.** Over 60 matches on Easy (after cycle 6), six one-note scripts win clearly:
   shoot on sight (W43 L7), high line + trap (W38 L9), dribble only (W35 L11), always tackle/press (W33 L8),
   park the bus (W30 L14) and hoof it (W18 L11). Not worked on in cycle 6.
-- **High is ahead of Normal again** (+0.117 ±0.041 points per mirror match after cycle 6, against +0.061 on the phase 6
-  build on the same seeds; the phase 2 target was ±0.05). Deep is 0.13 behind Normal, which the user accepted in phase 6.
-  The README and DESIGN state the measured numbers.
 - **Never played on a real phone.** Touch was only simulated (see the mobile release).
 - **On an upright phone some controls need a scroll:** the shape choice and Start button on the half-time report, the
   shot-kind buttons at the bottom of the preview, and the side panel (up to 31 px) while defending.
@@ -652,6 +649,9 @@ numbers" for the present build.
 - **Runs barely change results**: taking a touch gives the defence a reset that costs more than a run gains.
 - **"always tackle/press" is close on Normal** (W113 D59 L128) since phase 7; it still loses more than it wins.
 - **Zonal corner defence is a little weaker than man** (−0.07 ±0.06 points a mirror match).
+- **High is ahead of Normal again** (+0.117 ±0.041 points per mirror match after cycle 6, against +0.061 on the phase 6
+  build on the same seeds; the phase 2 target was ±0.05). Deep is 0.13 behind Normal. Both accepted as they are, with no
+  re-tune; the README and DESIGN state the measured numbers.
 
 **Accepted:**
 
