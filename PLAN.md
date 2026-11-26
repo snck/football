@@ -17,7 +17,7 @@ when the cycle is done.
 | 5 | C. Teammate runs | **done** (user dropped the +0.15 run target, see "Phase 5 result") |
 | 6 | D. Through balls (variety only; may be dropped after 3–5) | **done** (Deep − Normal −0.12, user accepted it, see "Phase 6 result") |
 | 7 | Extras: shot types, corners, last attack, identity, half-time choice | **done** (user kept everything as built, see "Phase 7 result") |
-| 8 | Final docs, full balance pass, ask about publishing | todo, **next** |
+| 8 | Final docs, full balance pass, ask about publishing | **done**, waiting for the user (High line, merge/publish; see "Phase 8 result") |
 
 Update this table and the log at the bottom at the end of every phase.
 
@@ -64,7 +64,9 @@ Standing rules:
 | 1015 ×10⁶ (mirror) | phase 6 confirmation of the final rule, both engines |
 | 1020 (shot kinds), 1023 (corners), 1025 (corner mirrors), 1026 (crosses per club), 1028 (half-time mirrors) ×10⁶ | phase 7 tuning |
 | 1021 (policies), 1022 (diag), 1024 (corner conversion), 1029 (balance), 1031–1034 (diag, calibration recheck) ×10⁶; sim 11, 46 | phase 7 hold-out, both engines where compared |
-| **1035000000+ unused** | |
+| 1035 (policies), 1036 (diag), 1037 (balance), 1038 (High mirror), 1039 (Deep mirror), 1040 (4-3-3 half-time mirror), 1041 (CPU half-time rule) ×10⁶; sim 47, lines 48 | phase 8 hold-out (1038, 1039 also on the phase 6 build) |
+| 950000000 (policies), 910000000 (diag 300), lines 31 | phase 8 rerun of the phase 0 baseline seeds on the final build |
+| **1042000000+ unused** | |
 
 ### Tools added for this cycle
 
@@ -654,6 +656,22 @@ Full numbers at 1,000+ matches on hold-out seeds; DEVLOG cycle 6 (what, why, bef
 failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, new tools); a browser playthrough
 (desktop + 375 px portrait + landscape), zero console errors; then ask about merging and publishing.
 
+### Phase 8 result (2026-11-26)
+
+Everything is in DEVLOG "Cycle 6" (phases 1–8, whole-cycle before/after, hold-out), "Current numbers (after cycle 6)" and "Known weaknesses".
+Short version, fresh seeds:
+- CPU brain 1.41, every fixed defence at least 0.14 below it, greedy 1.84; every one-note exploit loses on Normal; clubs within ±0.03 of the mean;
+  goals/team 1.29–1.30 (1.35 on `sim 300 11`); timing 18.8 / 13.9 min; calibration within 0.7 points, loose balls within 2.5.
+- Half-time 4-3-3 recheck: **+0.037 ±0.057** (phase 7's +0.106 not reproduced). CPU rule −0.019.
+- **New open point: High − Normal +0.117 ±0.041** (phase 6 build on the same seeds +0.061, so phase 7 probably added about 0.05). Deep − Normal −0.134
+  (−0.106 on the phase 6 build). Not diagnosed or tuned; README/DESIGN now state these numbers. Raise with the user: re-tune `TUNE.line.high.react`
+  (0.5 now; 0.55 gave −0.03 in phase 2) or accept.
+- Browser: headless Chrome over CDP (scratch `drive.js` + `autoplay.js`, not committed) played a full match at 1366×768, 375×667 and 667×375 through real
+  keys, clicks and buttons, no fallbacks, zero console messages after adding an inline favicon (`index.html`; the only message was a favicon 404).
+- Docs: DEVLOG cycle 6 written, DESIGN section 3 line numbers, 8 stats, 9 (pressing fatigue moved to "left out"), README line text and tool list,
+  CLAUDE.md sim speed (about 8 matches/s on one core).
+- Still to ask: merge `mechanics-6` into `main` and push (that publishes), and whether to delete this file first (its content is in DEVLOG).
+
 ## Log
 
 - 2026-11-25: analysis done, tools written, plan agreed. No game code changed. The 1,000-match baseline corrected two
@@ -713,3 +731,5 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   `hmirror.js`, `kinds.js`, `clubs.js`, the CDP driver) lived in the session scratchpad and are not committed. DESIGN, README, how-to text and CLAUDE.md
   are current; DEVLOG waits for phase 8. Waiting for the user on the open points.
 - 2026-11-26: the user kept everything as it is. Phase 7 closed; documentation only, no game code changed.
+- 2026-11-26: phase 8, see "Phase 8 result". The user asked for the next phase. No engine change; `index.html` gained an inline icon. Waiting for the
+  user on the High line and on merging/publishing.

@@ -23,7 +23,7 @@ node tools/diag.js 300 910000000      # goals by origin, action mix, shown vs ac
 node tools/policies.js 1000 950000000 # fixed habits vs the CPU on Normal, with 95% intervals, all cores: [matches] [seedBase] [name filter]
 ```
 
-The sims run at roughly 10 matches per second (about 70 on 12 cores for `balance.js`, `mirror.js` and `policies.js`, which use worker threads through `tools/pool.js`). `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
+The sims run at roughly 8 matches per second on one core (about 70 on 12 cores for `balance.js`, `mirror.js` and `policies.js`, which use worker threads through `tools/pool.js`). `?seed=123` in the page URL makes a browser match reproducible, and `window.UI` is exposed for debugging and automated playtests (`UI.m` is the match state).
 
 ## Architecture
 

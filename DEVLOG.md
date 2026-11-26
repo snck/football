@@ -4,7 +4,7 @@ Tools used for judging the game (all in the repo):
 `tools/sim.js` (CPU vs CPU stats), `tools/balance.js` (team round-robin),
 `tools/exploits.js` (scripted "human" strategies vs the CPU), `tools/timing.js`
 (real-time estimate), `tools/lines.js` (line heights, added in cycle 5), `npm test`
-(17 engine tests at first, 21 since cycle 5). I also drove the real UI in
+(17 engine tests at first, 21 after cycle 5, 58 after cycle 6). Cycle 6 added `tools/diag.js`, `tools/policies.js` and `tools/mirror.js`. I also drove the real UI in
 headless Chrome with Playwright from a scratch folder. That covered full matches from
 kickoff to full time, screenshots of every screen, and a hand-played session where I
 read each screenshot and chose each move myself (via a `?seed=` URL for
@@ -232,9 +232,54 @@ the mobile version without counters and line effects.
 
 ---
 
-## Cycle 6 (in progress): High line and Redmoor re-tuned (2026-11-25)
+## Cycle 6: mechanics (2026-11-25 to 2026-11-26)
 
-The rest of the cycle is logged in `PLAN.md` until it's finished. This part closes two known weaknesses from cycle 5.
+A planned pass over the mechanics, done in eight phases, one commit (or a few) each, on branch `mechanics-6`. Every phase
+was tuned on one block of seeds and judged on another, with 95% intervals, and compared with the build before it on
+the same seeds. The user decided every missed target; those decisions are recorded below.
+
+**New tools.** `tools/diag.js` breaks matches down by mechanic: goals by origin, action mix by zone, the odds shown
+against what happened, loose balls, press outcomes, the CPU's plans, corners and how halves end. `tools/policies.js`
+plays fixed habits (always press, pass first, take a touch every time…) against the CPU on Normal. `tools/mirror.js` puts one
+line against another with the same club on both sides. `tools/pool.js` runs these, and `balance.js`, on every core
+(about 70 matches a second on 12 cores).
+
+**What the analysis found** (`diag.js 300 910000000` and `policies.js 1000 950000000` on the cycle 5 build, `bb584d9`):
+- 48.6% of goals came in first-time chains, where the defence has no decision to make.
+- Corners: 8.3% were scored directly (real football: about 3%), 16.5% of all goals.
+- Through balls were 35.7% of all actions and 43.3% in midfield. Not an exploit, though: "through ball first" scored 0.29 points
+  a match below a greedy attacker.
+- A fixed defence (press + mark + trap every turn) did about as well as the CPU's look-ahead (1.27 against 1.34, ±0.08). A mark
+  or a trap cost almost nothing, so there was no reason not to add both.
+- `evaluate` guessed loose balls with constants (20–40% kept) where the race really gave 12–74%, so the CPU misjudged risk.
+- Every presser was slowed next beat, even one who won the ball. The rule was meant for a presser who is bypassed.
+- Text that didn't match the model: the clear said "50/50", the shot preview said −30% for pressure where the model used 22%,
+  and the penalty help said the keeper "saves about 2 in 3" (really about 57%, and takers scored about 80%).
+- The CPU's penalties were exploitable: its keeper dived centre 8% of the time, so shooting centre scored 86.8% against 62.2%
+  for a corner.
+
+### Phase 1: fixes
+
+- **Penalties** (1a). The CPU's mixes are now at equilibrium (`FB.AI.PEN_SHOT`, `PEN_DIVE`): keeper left/right/centre
+  0.345/0.345/0.31, taker 0.368/0.368/0.264. Whatever either side does, a goal is about 69% likely. A test checks that the human's
+  best and worst choice differ by less than 0.02, as taker and as keeper. The panel prints the four real chances from
+  `FB.penaltyGoal`, which `resolvePenalty` also rolls.
+- **Honest text** (1a). The shot preview's pressure factor moved to `TUNE.shotPressure` (0.22) and is used in both places. The clear preview
+  shows the real chance of keeping it.
+- **Press** (1b). Only a bypassed presser is slowed (the attackers keep the ball and the new carrier is nearer the presser's goal
+  than he is). A press that wins the ball or forces it back costs nothing.
+- **Loose balls** (1b). `FB.looseKeep` runs the same race as the resolver at eight spots the ball may roll to, with a cubic kernel. The
+  planned version, "best arrival per side through a sigmoid", missed by up to 12 points. The constants (scatter, noise, the beaten
+  player's delay) moved to `TUNE.loose` and are shared with the resolver. Assumed against actual, every case within 2 points (it was up to 41).
+  `outcomeValue` had `keep || 0.3`, which turned a certain loss into a 30% chance. Fixed.
+- **Dribble skill** (1b) now lowers the heavy-touch risk by 2 points for every 10 points of dribbling.
+
+No tuning was needed: `sim 300 11` goals/team 1.21 → 1.22, and every one-note script in `exploits.js` still loses more than it wins.
+The CPU clears less (0.5 → 0.3 a match), and only with someone upfield.
+
+### Phase 2: High line and Redmoor re-tuned
+
+This phase closed two known weaknesses from cycle 5.
 
 **High line.** `TUNE.line.high.react` (how much later defenders turn to chase a ball in behind) went from 0.35 to
 **0.5 s**. Points of High minus points of Normal per match, same club on both sides:
@@ -268,7 +313,204 @@ L154 → W68 D57 L175). `policies.js 1000 965000000`: "press + mark, high line" 
 no row changed beyond its error (±0.11) except "press + trap", 1.26 → 1.37, right at it and equal to the CPU brain, which phase 4 of
 the plan is meant to price. Match length 18.5 → 18.4 min.
 
-## Current numbers (after cycle 5)
+### Phase 3: Cover
+
+**Why:** half the goals came in first-time chains, where the defence has no say. **Rule:** a new order, Cover. One player
+within 14 m stands off the carrier, 3.5 m goal-side (a press gets to 1.5 m). After the next completed ball that could be
+played first-time, he slides up to 4 m towards the receiver, before the first-time decision is made, so the odds shown already
+include it. He jockeys dribblers (0.7 m more reach, half the fouls) and is never caught upfield. It can't be combined with
+a press or a tackle. The slide is done in the `resolveAttack` wrapper, so no beat loop changed.
+
+**Target missed: first-time chains at 35–44% of goals.** Hold-out (4,000 matches, 976000000): **50.9 ±1.0%** with cover, 50.1 ±1.0%
+without. 75% of chain goals are a through ball and then a first-time shot, and the receiver is a median 22 m from the covering
+player (18 m after the slide). Slides of 4, 7 or 10 m can't be told apart, and even a cover man who teleports to the receiver left
+44.8 ±2.0%. No one-defender slide can reach the target. **Decision (user):** keep Cover and drop the target.
+
+**The CPU's look-ahead for the slide made it weaker** (−0.11 ±0.07 points a mirror match). It was replaced by a fixed price,
+`FB.AI.PLAN.cover` = 0.002: the CPU covers in 20% of plans, at no measurable cost (+0.046 ±0.046 against the same CPU without cover,
+12,000 hold-out matches). Cover habits came out at least 0.25 points below the CPU. Goals/team 1.265 → 1.236 (±0.022).
+
+### Phase 4: lasting marks, a trap with a cost
+
+- **A mark lasts** two more beats (`m.markOrders`). The marker follows his man after the man moves (moving with the other defenders,
+  he was tight 14% of the time; this way, 47%). He leaves his zone, and **he doesn't cut out balls meant for anyone else**. Without
+  that addition, press + mark was +0.10 to +0.14 over pressing alone. The side can release the mark (key `X`).
+- **Trap:** a defender who stepped up needs 0.4 s longer to chase a through ball (0.25 s left the habit +0.05 ahead), and is caught
+  upfield if a through ball or lob is completed beyond him.
+
+Hold-out (4,000 matches a row, 985000000, ±0.04): press + trap − press **+0.09 → +0.01** (met). Press + mark − press stayed
+**+0.10 ±0.06** here, about +0.06 ±0.03 pooled with tuning (missed: unchanged from before). Press + mark + trap went from 0.07 below the CPU to 0.20
+below; every fixed defence was at least 0.16 below. Offsides/team 0.56. The edge of re-marking comes from the extra repositioning; none
+of four changes tried removed it beyond the error. **Decision (user):** accept marks as they are.
+
+### Phase 5: teammate runs
+
+**Why:** taking a touch was weak and had no purpose. **Rule:** when you take a touch you may call one run (in behind, overlap,
+come short). It's made in the next beat's shape step, before the defence decides, so the defence sees it and the odds stay honest.
+A through ball to a player who has just run in behind gets a 0.25 s head start in that beat's first action. The CPU calls runs
+by a fixed rule (`AI.chooseRun`), about 22 a match.
+
+**Target missed:** touch + the CPU's runs scored +0.02 ±0.06 over a plain touch (target +0.15). The head start only matters when the
+runner, not the ball, is the slower to the spot (26% of such through balls). Even a 1 s head start gave only +0.09 for the best
+habit. Taking a touch gives the defence a reset (a shape step and a decision that sees the run), and that costs more than a run
+gains. "Run behind every time" came out at 1.39 against the CPU's 1.36 (±0.06, can't be told apart). **Decision (user):** keep runs
+and drop the target.
+
+### Phase 6: through balls
+
+Through balls were 36% of all actions. **Rules:** an outfield defender already goal-side of the target and facing the play reacts in
+0.45 s instead of 0.8 s (`TUNE.faceReact`); his line's head start is added to either. And a short pass to feet (15 m or less, receiver
+under 0.25 pressure) makes the next first-time ball cost 3% instead of 5% (`TUNE.softPass`).
+
+Hold-out (1011000000 and 1010000000): through balls 36.2% → **32.4%** of actions (39.7% in midfield), pass 21.3 → 23.3%, lob 17.5 → 18.6%;
+every "… first" habit at least 0.11 below greedy; goals/match 2.51 → 2.40. The soft pass changes nothing measurable in CPU play (it
+looks one action ahead); it's a small reward a human can see.
+
+**Deep line got weaker.** The first build let a facing defender ignore his line's head start, which moved High to +0.139 and Deep to
+−0.158 against Normal. The final rule adds it, as the spec said. On fresh seeds (16,000 mirror matches, 1015000000): High − Normal
++0.067 → +0.074, Deep − Normal **−0.054 → −0.120 ±0.039**. Not diagnosed. **Decision (user):** accept Deep as it is. The README now
+says Deep is weaker.
+
+### Phase 7: shot kinds, corners, last attack, club identity, half-time shape
+
+1. **Shot kinds** (`TUNE.shot`): placed (the old shot, identical numbers), driven (pays from range; more blocks, fewer on target,
+   fewer saves held) and a chip (only when the keeper is more than 4 m off his line). By goal chance, placed is best inside 12 m and
+   in most of 12–18 m, driven beyond 24 m, chip in 7% of shots.
+2. **Corners** (`TUNE.corner`): a short option 11 m from the flag; a header from the delivery scores 0.6 of the same header in open
+   play; defending is a setting each side keeps (man, zonal, two up), so no new prompt. **Corners scored directly 8.7% → 3.9%**
+   (target 4–5%), and corner goals went from 15.9% to 7.2% of all goals.
+3. **Last attack:** when time is up and a team is in the final third, or has a corner or a free kick near the box, play goes on
+   until the ball is lost, out or scored, for at most 3 beats. Halves ending with the ball in the attacking third: 17.0% → 0.6%.
+4. **Identity:** `style.cross` was dead data; it now biases the CPU towards crosses. Each club defends corners its own way, and has three
+   players with a trait (strong in the air, long passer, dribbler) that changes `evaluate`. The previews name them.
+5. **Half-time:** each side may change shape once. The CPU goes to 4-3-3 when behind.
+
+Hold-out against the phase 6 build (same seeds): goals/team 1.212 → **1.284** (12,000 matches); open-play direct goals rose (0.71 →
+0.91 a match: driven shots and the last attack), corner goals fell. "always tackle/press" went from 80-67-153 to **113-59-128**: it still
+loses, but it's much closer. Zonal is a little worse than man (−0.066 ±0.057), and 4-3-3 at half-time measured +0.106 ±0.081 over keeping
+the shape (rechecked in phase 8, below). **Decision (user):** keep everything as built.
+
+### Phase 8: the whole cycle, measured
+
+**Before and after the cycle, same seeds** (the cycle 5 build `bb584d9` against the final build; the "before" numbers were
+measured in phase 0):
+
+| `policies.js 1000 950000000` (±0.08; a difference ±0.11) | Before | After |
+|---|---|---|
+| CPU brain | 1.34 | 1.41 |
+| hold shape always | 0.67 | 0.65 |
+| press nearest | 1.08 | 1.09 |
+| mark top threat | 0.76 | 0.80 |
+| press + mark | 1.23 | 1.16 |
+| press + trap | 1.21 | 1.23 |
+| press + mark + trap | **1.27** | **1.17** |
+| press + mark, high line | 1.16 | 1.20 |
+| greedy attack | 1.89 | 1.83 |
+| through ball / pass / lob / dribble first | 1.60 / 1.83 / 1.23 / 1.67 | 1.46 / 1.79 / 1.14 / 1.57 |
+| always take a touch | 0.94 | 1.01 |
+
+| `diag.js 300 910000000` | Before | After |
+|---|---|---|
+| goals/match | 2.34 | 2.61 |
+| goals in first-time chains / open play direct / corners direct | 48.6 / 27.5 / 16.5% | 53.4 / 32.4 / 7.9% |
+| corners scored directly | 8.3% | 4.6% |
+| through balls, share of actions | 35.7% | 32.1% |
+| loose balls, worst gap between `evaluate` and the result | 41 points | 3.0 points |
+| halves ending with the ball in the attacking third | 17.2% | 0.3% |
+
+`lines.js 300 31`, active defending, W-D-L (GF/GA): deep 96-82-122 (1.00/1.13) → 108-71-121 (1.12/1.18), normal 122-68-110 (1.22/1.16) →
+90-79-131 (1.26/1.43), high 106-77-117 (1.31/1.40) → 104-84-112 (1.40/1.45). Each cell is ±0.15 points, so the lines can't be ranked from it;
+`mirror.js` (below) does that.
+
+What changed for the player: the CPU's defence now beats every fixed defensive habit by at least 0.14 points on both seed blocks
+measured (here 0.18; it was 0.07). Corners are
+realistic. The game is a little higher-scoring (goals/team about 1.22 → 1.29 over large samples, mostly from phase 7). Chains still
+produce about half of all goals: the target set for Cover was dropped.
+
+**Hold-out on fresh seeds** (all from 1035000000 up, none used before):
+- `policies.js 1000 1035000000`: CPU brain 1.41; greedy 1.84; every fixed defence at least 0.14 below the CPU (press + mark 1.27 is the
+  closest, press + mark + trap 1.15, hold 0.64); through / pass / lob / dribble first 1.33 / 1.80 / 1.25 / 1.64; always take a touch 1.02, with the
+  CPU's runs 0.93, with a run in behind 0.91. Run behind / come short / overlap every time 1.38 / 1.35 / 1.38: below the CPU (in phase 7 two of them
+  sat above it, inside the error).
+- `diag.js 1000 1036000000`: 2.61 goals/match; chains 50.7%, open play direct 34.5%, corners direct 7.0% (3.8% of corners); shown vs actual within 0.7
+  points for every action (through 63.6/63.7, pass 79.4/79.7, placed shot 22.5/22.4, driven 7.2/7.1, chip 38.1/37.9, header 51.9/52.6); loose balls
+  within 2.5 points. CPU plans: tackle 17.3%, trap 17.1, press 15.0, mark + press 14.2, mark 14.0, cover 9.3, cover + mark 7.9, hold 2.5.
+- `balance.js 1000 1037000000` (12,000 matches, ±0.033): Harbour +0.016, Redmoor +0.017, Kestrel −0.027, Coldforge −0.006 against the mean;
+  goals/team 1.291.
+- **Lines**, `mirror.js 16000 1038000000 high normal` and `… 1039000000 deep normal` (±0.04): **High − Normal +0.117**, Deep − Normal **−0.134**.
+  On the phase 6 build, same seeds: High +0.061, Deep −0.106 (a change within the error for Deep). So phase 7 probably widened High's lead (by about 0.05, at the edge of the
+  error); the phase 2 target was ±0.05. Not diagnosed or tuned (see Known weaknesses).
+- **Half-time shape** (a scratch mirror tool: same club both sides, one side changes at half-time, the other never does; 8,000 matches,
+  ±0.057): 4-3-3 **+0.037** (1040000000), the CPU's rule −0.019 (1041000000). Phase 7's +0.106 from tuning seeds isn't reproduced: switching
+  to 4-3-3 is not a dominant choice.
+- `sim.js 1000 47`: 1.30 goals/team; `sim.js 300 11`: 1.35 (1.21 after cycle 5).
+- `exploits.js 300 normal` is identical to the phase 7 build (fixed seeds, no engine change since); every one-note script loses more than
+  it wins. "always tackle/press" (113-59-128) and "dribble only" (99-91-110) are the closest.
+- `timing.js 40`: Normal 18.8 min, Short 13.9.
+
+**Browser playthrough.** A script drove headless Chrome over the DevTools protocol and played one full match at each size: desktop
+1366×768, a phone upright at 375×667 and sideways at 667×375 (touch emulated). Every decision went through real keys, canvas clicks and
+buttons: 136–138 per match, none of them needed a fallback. It covered press, cover, tackle, mark, release, trap, a line change, all three shot kinds, runs,
+taking a touch, goals with a replay, a penalty, the pause menu (corner defence set to zonal), a change of shape at half-time, the last attack and
+full time. No console messages, no sideways scroll. The only message on the first run was a 404 for `favicon.ico`, so the page now has an
+inline icon. Replaying the desktop match on the same `?seed=` gave the identical match. Two things to know on an upright phone: the half-time
+shape choice and its button are below the stats (the report scrolls), and the side panel scrolls by up to 31 px while defending.
+
+## Current numbers (after cycle 6)
+
+`node tools/sim.js 300 11`, CPU vs CPU, Normal length:
+
+```
+beats/match 106.4 (min 94, max 123)
+goals/team 1.35  shots 9.0  onTarget 4.0  xG 1.29  conv 15.0%
+passes 56.4  pass% 68.4  corners 2.4  fouls 2.7  yellows 0.94  reds/match 0.167  offsides 0.68
+tackles 4.0  interceptions 5.7  poss range 34–66%
+goals per team dist {"0":135,"1":213,"2":177,"3":59,"4":15,"5":1}
+top scores 1-1:36 1-2:32 1-0:32 2-1:30 2-2:26 0-2:24 2-0:18 0-1:18 1-3:14 2-3:11
+goal types {"header":132,"shot":574,"chip":79,"free kick":5,"penalty":19}
+```
+
+`node tools/sim.js 1000 47`: goals/team 1.30, shots 9.0, on target 4.0, xG 1.31, corners 2.4, offsides 0.68, possession 30–70%; most
+common scores 1-1, 0-1, 2-1, 1-2, 1-0.
+
+`node tools/balance.js 1000 1037000000` (12,000 matches, 6,000 per club, ±0.033):
+
+```
+Harbour City       W2264 D1558 L2178  pts 1.392 (+0.016 v mean)  GF/m 1.27 GA/m 1.26
+Redmoor Athletic   W2326 D1378 L2296  pts 1.393 (+0.017 v mean)  GF/m 1.38 GA/m 1.36
+Kestrel Vale       W2185 D1532 L2283  pts 1.348 (-0.027 v mean)  GF/m 1.24 GA/m 1.28
+Coldforge United   W2232 D1518 L2250  pts 1.369 (-0.006 v mean)  GF/m 1.27 GA/m 1.26
+```
+
+`node tools/exploits.js 300 normal` (scripted human vs CPU):
+
+```
+thoughtful (greedy EV)       W162 D 68 L 70
+careless (50% random)        W 11 D 46 L243
+random everything            W  0 D 18 L282
+shoot on sight               W 73 D 77 L150
+dribble only                 W 99 D 91 L110
+hoof it (clear/lob)          W 34 D 96 L170
+safest pass only             W  0 D156 L144
+park the bus (deep, hold)    W 49 D 55 L196
+always tackle/press          W113 D 59 L128
+high line + trap always      W 55 D 58 L187
+```
+
+Easy (`exploits.js 60 easy`): thoughtful W52 D6 L2, and every one-note script except safest pass wins: shoot on sight W43 D10 L7, high line + trap
+W38 D13 L9, dribble only W35 D14 L11, always tackle/press W33 D19 L8, park the bus W30 D16 L14, hoof W18 D31 L11. Hard (`exploits.js 60 hard`):
+thoughtful W22 D14 L24, and every one-note script loses heavily (the best, dribble only, W14 D16 L30).
+
+Lines, mirror matches (`mirror.js 16000`, same club both sides, ±0.04): High − Normal +0.117 (1038000000), Deep − Normal −0.134 (1039000000).
+
+`node tools/policies.js 1000 1035000000`: see cycle 6, phase 8.
+
+`node tools/timing.js 40`: Normal 107 beats, 50 attacking + 47 first-time + 46 defensive decisions, **18.8 min**. `timing.js 40 short`: 78 beats,
+**13.9 min**.
+
+`npm test`: 58 passing.
+
+## Numbers after cycle 5 (superseded)
 
 `node tools/sim.js 300 11`, CPU vs CPU, Normal length:
 
@@ -392,10 +634,24 @@ numbers" for the present build.
 
 **Open, worth fixing:**
 
-- **Easy rewards shortcuts.** Over 60 matches on Easy, five one-note scripts win clearly:
-  high line + trap (W42 L8), dribble only (W40 L3), always tackle (W35 L10), park the bus
-  (W28 L13) and shoot on sight (W25 L8).
+- **Easy rewards shortcuts.** Over 60 matches on Easy (after cycle 6), six one-note scripts win clearly:
+  shoot on sight (W43 L7), high line + trap (W38 L9), dribble only (W35 L11), always tackle/press (W33 L8),
+  park the bus (W30 L14) and hoof it (W18 L11). Not worked on in cycle 6.
+- **High is ahead of Normal again** (+0.117 ±0.041 points per mirror match after cycle 6, against +0.061 on the phase 6
+  build on the same seeds; the phase 2 target was ±0.05). Deep is 0.13 behind Normal, which the user accepted in phase 6.
+  The README and DESIGN state the measured numbers.
 - **Never played on a real phone.** Touch was only simulated (see the mobile release).
+- **On an upright phone some controls need a scroll:** the shape choice and Start button on the half-time report, the
+  shot-kind buttons at the bottom of the preview, and the side panel (up to 31 px) while defending.
+
+**Accepted in cycle 6 (the user's decisions, with the numbers in the cycle 6 entry):**
+
+- **First-time chains still produce about half the goals** (50.7%). Cover can't reach the receiver in time.
+- **Re-marking the top threat every turn** is still worth a little more than pressing alone (about +0.06), though every
+  fixed defence is at least 0.14 points below the CPU.
+- **Runs barely change results**: taking a touch gives the defence a reset that costs more than a run gains.
+- **"always tackle/press" is close on Normal** (W113 D59 L128) since phase 7; it still loses more than it wins.
+- **Zonal corner defence is a little weaker than man** (−0.07 ±0.06 points a mirror match).
 
 **Accepted:**
 
@@ -410,7 +666,7 @@ numbers" for the present build.
   lever is your active choices, which is the right emphasis but means "park the bus"
   is a weak plan rather than a viable one.
 - **Dribble-heavy play is a legitimate style** vs the CPU, though on Normal it now loses
-  a little more than it wins (W94 D85 L121). It's safer than its looks suggest because
+  a little more than it wins (W99 D91 L110 after cycle 6). It's safer than its looks suggest because
   the CPU rarely commits lunges at a runner. Not dominant on Normal, so I left it.
 - **No substitutions, fatigue or injuries.** These were cut by design (see DESIGN.md)
   to keep every beat about the ball.

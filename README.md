@@ -28,6 +28,8 @@ npm run exploits     # scripted "human" strategies (spam shots, park the bus, ke
 npm run lines        # compares deep, normal and high defensive lines
 node tools/mirror.js # one line against another, same club on both sides
 node tools/timing.js # estimated real-world match length
+node tools/diag.js   # goals by origin, action mix, shown vs actual odds
+node tools/policies.js # fixed habits (always press, pass first…) against the CPU
 ```
 
 ## How to play
@@ -95,7 +97,7 @@ CPU can counter you the same way, so a pass that gets cut out is costly.
 | `4` **Cover** | Click one of your players inside the big ring. He stands off the carrier, then steps up to 4 m towards whoever receives the next completed ball, before it can be played first-time. Harder to dribble past and half the fouls, but little pressure on the pass. |
 | `X` | **Release** the standing mark: the marker goes back to his zone next turn. |
 | `T` | **Offside trap**: the back line steps up 4 m (a marker stays with his man). Whoever steps up needs 0.4 s longer to chase a ball played in behind, and is slow next turn if a through ball or lob beats him. |
-| `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. **Deep** protects the box: more shots blocked, more headers won, fewer balls in behind, but you allow more shots from inside the box and win the ball back a little further from their goal. **High** squeezes midfield and wins it back higher (better counters), but your defenders have to turn and chase balls over the top. Overall, High and Normal are about level and Deep is weaker, so keep it for the situation (protecting a lead late on, for example). |
+| `Q` / `W` / `E` | Line height: deep / normal / high. This setting stays until you change it. **Deep** protects the box: more shots blocked, more headers won, fewer balls in behind, but you allow more shots from inside the box and win the ball back a little further from their goal. **High** squeezes midfield and wins it back higher (better counters), but your defenders have to turn and chase balls over the top. In CPU-against-CPU tests High comes out a little ahead of Normal (about 0.1 points a match) and Deep a little behind, so keep Deep for the situation (protecting a lead late on, for example). |
 
 `Enter` confirms the plan; `Space` just holds shape (a standing mark stays on). You can combine one press,
 tackle *or* cover with one mark and the trap.

@@ -172,10 +172,11 @@ the odds you see are the real odds.
   | Lane-interception reach, defenders in the middle third | ×1 | ×1 | ×1.15 |
   | Head start (s) in aerial duels inside their own box | +0.25 | 0 | −0.1 |
 
-  Overall, High is about level with Normal and Deep is weaker. In mirror matches (same club on
-  both sides, CPU play) High takes 0.074 ±0.041 points per match more than Normal and Deep 0.120 ±0.039 fewer,
-  over 16,000 matches each (seeds 1015000000+, after the through-ball change in cycle 6 phase 6; before it,
-  +0.067 and −0.054 on the same seeds).
+  Overall, High is a little stronger than Normal and Deep is weaker. In mirror matches (same club on
+  both sides, CPU play) High takes 0.117 ±0.041 points per match more than Normal and Deep 0.134 ±0.039 fewer,
+  over 16,000 matches each (seeds 1038000000+ and 1039000000+, after cycle 6). On the same seeds the build before
+  phase 7 gave High +0.061, so phase 7 probably widened High's lead; the target set in phase 2 was ±0.05. The
+  through-ball change in phase 6 had moved Deep from −0.054 to −0.120.
 
 - **Loose balls** (misplaced passes, bad touches, heavy touches, clearances) go to whoever
   gets there first: distance over speed, plus some luck. `evaluate` estimates who that will
@@ -332,9 +333,9 @@ The engine, AI and commentary don't know about screens. All of this is in
   whistle and kicks are synthesised with WebAudio. All names are invented from neutral
   first-name and surname pools.
 - **Compression is deliberate.** About 105 beats can't contain about 1,000 real
-  events. Stats are tuned to *look* right per match (scores 0–5, about 8.5 shots and
-  about 4 on target per side, 1.2 goals per side, possession 30–70%). Fouls (about
-  3) and corners (about 2) are lower than real football, because only decisive
+  events. Stats are tuned to *look* right per match (scores 0–5, about 9 shots and
+  about 4 on target per side, 1.3 goals per side, possession 30–70%). Fouls (about
+  3) and corners (about 2.4) are lower than real football, because only decisive
   moments are modelled.
 
 ## 9. Ideas not built yet
@@ -345,5 +346,8 @@ list and were built in devlog cycle 5.
 - **A CPU that plans for dribbles** (jockeying itself is part of Cover).
 - **Set-piece choices:** short or long goal kicks (corners were built in cycle 6).
 - **Half-time attitude:** a change of risk or pressing as well as shape (the shape change was built in cycle 6).
-- **Pressing fatigue:** players who press or tackle a lot lose some pace late on.
 - **Penalty memory:** takers and keepers develop habits that can be read.
+
+Considered in cycle 6 and left out: pressing fatigue (fatigue is out by design, section 2), hidden
+defensive guesses (they would break the honest odds), separate throw-in rules (about 0.3 throw-ins a
+match) and a bigger momentum effect (it stays cosmetic).
