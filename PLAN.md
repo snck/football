@@ -14,8 +14,8 @@ when the cycle is done.
 | 2 | Re-tune Redmoor and the High line | **done** (user approved react 0.5, Redmoor 73) |
 | 3 | A. Cover / jockey | **done** (user dropped the chain-share target, see "Phase 3 result") |
 | 4 | B. Lasting marks, costlier trap | **done** (mark target missed, user accepted it, see "Phase 4 result") |
-| 5 | C. Teammate runs | **built, waiting for the user's decision** (run target missed, see "Phase 5 result") |
-| 6 | D. Through balls (variety only; may be dropped after 3–5) | todo, next once phase 5 is decided |
+| 5 | C. Teammate runs | **done** (user dropped the +0.15 run target, see "Phase 5 result") |
+| 6 | D. Through balls (variety only; may be dropped after 3–5) | todo, **next** (through is 36.1% of actions, so it goes ahead) |
 | 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo |
 | 8 | Final docs, full balance pass, ask about publishing | todo |
 
@@ -468,6 +468,9 @@ off the runner's time 0.92 / 0.96; **1 s against the chaser 0.92 / 1.00**. So ev
 for the CPU's own choice: the head start is not the lever. Taking a touch gives the defence a reset (a shape step and a decision that sees the run, so it
 can mark the runner or trap him), and that costs more than a run gains.
 
+**Decision (user, 2026-11-26):** keep runs as they are and drop the +0.15 target. The CPU's run rule stays as built (the alternative, always sending the
+furthest-forward player in behind, was offered and not taken; never measured as the CPU's rule).
+
 ## Phase 6: D. Through balls (check first)
 
 A variety problem (35.7% of actions, 43.3% in midfield), not an exploit: the habit is already 0.29 below greedy. Run
@@ -556,3 +559,4 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   667×375): calling a run by key and by button, switching kind, the click on the runner, delivery on Take a touch, the head-start line, the CPU's run in the
   defence panel; no console errors. DESIGN, README, how-to text and CLAUDE.md are current; DEVLOG entry waits for phase 8. Waiting for the user to decide
   on the missed targets before phase 6.
+- 2026-11-26: the user kept runs as they are and dropped the +0.15 target. Phase 5 closed; documentation only, no game code changed.
