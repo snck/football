@@ -53,7 +53,7 @@ don't. Nothing is ever timed.
 | `2` | **Through ball** | Click space ahead of a runner. He races the defenders and keeper to it. A defender who has to turn reacts in 0.8 s, one already goal-side of the spot in 0.45 s, so aim behind them. |
 | `3` | **Lofted / cross** | Click a teammate or a spot. It goes over the lines but is contested in the air. Into the box from wide, it becomes a cross and a header at goal. |
 | `4` | **Dribble** | Click inside the ring. Defenders near your path may tackle (or foul you; in the box that's a penalty). |
-| `5` | **Shoot** | Shows your goal chance, block risk and on-target odds first. |
+| `5` | **Shoot** | Shows your goal chance, block risk and on-target odds first. Press `5` again (or tap the buttons in the preview) to switch the kind of shot: **placed** (the usual), **driven** (struck hard: better from outside about 18 m, but blocked more, on target less, and the keeper holds fewer) or a **chip** (only when their keeper is more than 4 m off his line: it goes over him and the blockers, but often too high). Each button shows its goal chance. |
 | `6` | **Clear** | Hoof it 40 m upfield when in trouble. |
 
 Click once to preview, then click again (or press `Enter`) to commit. `Esc` cancels.
@@ -71,6 +71,15 @@ in the next beat, before the defence decides, so they see it and can mark him or
 catch him offside. A through ball to a player who has just run in behind gets a 0.25 s head
 start in that beat's first action, and the preview shows it. Play first-time instead and the
 run is forgotten. The CPU calls runs too: you'll see its arrow when you defend.
+
+**Corners:** cross to the near post, the far post or anywhere in between, or play it **short**
+to the teammate waiting about 11 m from the flag (he's free, and the move goes on with
+first-time rules). A header from a corner scores less than the same header in open play,
+because the box is crowded; the preview says so and tells you how they defend it.
+
+**Last attack:** when time is up but a team is attacking in the final third, or has a corner
+or a free kick near the box, the referee lets it finish: play goes on until the ball is lost,
+goes out or is scored, for at most 3 more turns. The banner says **LAST ATTACK**.
 
 **Counter-attack:** when you win the ball with a tackle or an interception, you get
 one first-time move straight away, before the opponent can get back into shape. The
@@ -91,6 +100,13 @@ CPU can counter you the same way, so a pass that gets cut out is costly.
 `Enter` confirms the plan; `Space` just holds shape (a standing mark stays on). You can combine one press,
 tackle *or* cover with one mark and the trap.
 
+**Corners against you** are defended the way you set in the pause menu (`Esc`), and that stays until you
+change it: **Man** (a defender goal-side of each attacker in the box), **Zonal** (your defenders hold spots in
+and around the six-yard box and get a head start in the air, but nobody follows the runners, so a short
+corner and a cross from a new angle can find a free man) or **Two up** (your two quickest midfielders or
+forwards wait on halfway to break, and the attackers keep one more man back to watch them). Each club defends
+corners its own way.
+
 ### Reading the screen
 
 - **Badges:** green is safe, yellow is a gamble, orange and red are long shots.
@@ -101,8 +117,14 @@ tackle *or* cover with one mark and the trap.
   from the lane (56%)").
 - Commentary, the momentum bar, stoppage-time board, a GOAL! banner with an optional
   slow-motion replay (`R`), and half-time and full-time stats.
+- **Key players:** each club has three players with a trait, listed on the team cards: **strong in the air**
+  (wins more aerial duels, attacking or defending), **long passer** (loses half as much accuracy beyond 25 m on
+  through balls and lofted passes) or **dribbler** (fewer heavy touches, harder to tackle). The preview says when
+  one changes the odds.
+- **Half-time:** the report lets you make one change for the second half: your shape (4-4-2, 4-3-3, 4-2-3-1 or
+  5-3-2). Each player moves to the nearest spot in the new shape. The CPU goes to 4-3-3 when it's behind.
 
-Other keys: `H` help, `Esc` pause menu (animation speed, sound, restart, quit).
+Other keys: `H` help, `Esc` pause menu (animation speed, sound, how you defend corners, restart, quit).
 
 ### On phones and tablets
 

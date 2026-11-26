@@ -66,7 +66,9 @@ eats more clock than quick play in the final third.
      dribble leaves them beaten and slow to recover.
    - **Shoot**. The chance depends on distance, angle, pressure, blockers in the
      cone and the shooter's finishing. Shots can be blocked, saved and held, parried
-     for a corner, parried into a rebound, or go wide.
+     for a corner, parried into a rebound, or go wide. There are three kinds (section 3):
+     **placed** (the usual shot), **driven** (pays from range, but more blocks, fewer on
+     target, fewer saves held) and a **chip** over a keeper who is more than 4 m off his line.
    - **Clear**: hoof it about 40 m upfield. The preview shows how often a teammate gets there
      first; with nobody upfield, that's rarely.
 4. **Resolution (animated).** The ball and players move on the pitch, and the
@@ -110,8 +112,9 @@ ball, and the attack when you have it. This keeps the pace up and the match insi
 - 11 v 11 with 4 fictional teams, each with its own formation and style.
 - **Offside** at the moment of the pass, for passes and through balls. There's no
   offside from throw-ins, corners or goal kicks. The preview always flags it.
-- **Set pieces**: kick-off, throw-in, goal kick, corner (cross to any spot), free
-  kick (direct shot with a wall if in range), and penalty (a mind game: the taker
+- **Set pieces**: kick-off, throw-in, goal kick, corner (cross to any spot, or short to a
+  teammate who waits 11 m from the flag; the defence is set up the way that side defends
+  corners, see section 3), free kick (direct shot with a wall if in range), and penalty (a mind game: the taker
   picks left, centre or right and the keeper picks a dive, with the odds of each pairing
   shown; the CPU plays an equilibrium mix, so no side is a reliable answer. Nothing is timed).
 - **Fouls and cards**: these come from tackles and dribble challenges. Yellow,
@@ -119,7 +122,15 @@ ball, and the attack when you have it. This keeps the pace up and the match insi
   chance (last man, in the final third). A sent-off player is not replaced.
 - **Two halves of 45 minutes** with stoppage time based on goals, cards and
   set-piece stoppages, shown on the fourth official's board. Last-gasp drama: a
-  penalty awarded after time is up is still taken.
+  penalty awarded after time is up is still taken, and a **last attack** is played out:
+  when time is up and a team is on the ball past 70 m (its own frame), or has a corner or a
+  free kick past 74 m, play goes on until the ball is lost, goes out, is scored or is played
+  back behind 60 m, for at most 3 beats. Once per half.
+- **Half-time change**: each side may switch formation once. Each outfield player takes the
+  nearest free spot in the new shape, and its role. The CPU goes to 4-3-3 when behind.
+- **Club identity**: formation, line, pressing, risk, how much the CPU likes to cross
+  (`style.cross`), how the club defends corners (`style.corner`), and three players per club
+  with a trait (section 3).
 - **Left out on purpose**: substitutions, fatigue and injuries. They add menus and
   bookkeeping but little moment-to-moment decision-making in a 15-minute match.
   Also left out: switching ends at half-time. You always attack the same way (left to
@@ -173,6 +184,27 @@ the odds you see are the real odds.
   about half the time and a misplaced through ball about 40%. A clearance depends on who is
   upfield: a quarter of the time on average. The CPU uses the estimate to weigh risks, and the Clear
   preview shows it.
+- **Shot kinds** (`TUNE.shot`). Placed is the plain shot. The others change the same model:
+
+  | | Placed | Driven | Chip |
+  |---|---|---|---|
+  | When | always | always | keeper more than 4 m off his line; not from a free kick |
+  | Goal chance | as above | × (1 + 0.025 × (metres from goal − 18)), within ×0.8 to ×1.35 | × (0.4 + 0.15 × (metres he is off − 4)), up to ×2.2, instead of the usual bonus for a keeper off his line |
+  | Block chance | as above | ×1.4 | ×0.3 (over the bodies) |
+  | On target | as above | 6 points less | goal chance + 0.1 (rarely saved) |
+  | Saves held / pushed out / loose | 52 / 28 / 20% | 36 / 34 / 30% | 70 / 15 / 15% |
+
+  So placing it is best close in, driving it from range, and a chip when the keeper has come out.
+- **Corners** (`TUNE.corner`). A header from the delivery scores 0.6 of the same header in open
+  play (a crowded six-yard box). How the side defends them is a setting it keeps: **man** (a
+  defender 1.1 m goal-side of each attacker in the box, one on the near post), **zonal** (defenders
+  on seven fixed spots in and around the six-yard box, with a 0.25 s head start in the air, but
+  nobody follows the attackers) or **two up** (the two quickest players who aren't defenders wait
+  on halfway; the attackers keep one more man back to watch them, so one fewer in the box).
+- **Traits** (`TUNE.traits`, three per club in `FB.TEAMS`). **Strong in the air**: +0.3 on his
+  side of an aerial duel's sigmoid (about 10 points of heading), attacking or defending. **Long
+  passer**: beyond 25 m, through balls and lofted passes lose accuracy at half the usual rate.
+  **Dribbler**: heavy-touch risk 2 points lower, challengers' tackle chance ×0.85.
 - **Heavy touches** when dribbling depend on distance and pressure, and on the carrier's
   dribbling: 2 points less risk for every 10 points of skill.
 - **Pressing has a cost**: a presser who is bypassed (the attackers keep the ball and the new
@@ -202,11 +234,13 @@ the odds you see are the real odds.
 
 - **Attack**: it generates about 25 to 50 valid candidate actions (passes to every
   teammate, through balls ahead of every runner, lofted passes and crosses into
-  four box zones, dribbles in 9 directions, and a shot). It scores each by
+  four box zones, dribbles in 9 directions, and a shot of each kind it may take, of which it
+  keeps only the best, so three similar shots don't get three shares of the pick). It scores each by
   **expected value** over its outcomes, using a positional threat map (similar to
   xT). Keeping the ball in a dangerous spot is worth a lot, and losing it near your
   own goal costs a lot. Team style changes the weights: direct teams value progress,
-  possession teams value safety. So does game state: a team trailing late takes more
+  possession teams value safety, and `style.cross` adds up to ±0.01 to a cross that ends in a
+  header (0.02 × (cross − 0.5)). So does game state: a team trailing late takes more
   risk, and a team leading late protects the ball. It picks with a softmax, which
   gives variety. The temperature depends on difficulty.
 - **Defence**: it builds up to about 16 defensive plans (hold; press with the nearest
@@ -233,6 +267,9 @@ the odds you see are the real odds.
   teammate when pressed with no pass over 80%; else in behind with the forward who has
   most space behind the line (at least 8 m); else, when wide past halfway, an overlap
   by the nearest teammate behind the ball.
+- **Set-ups**: each club defends corners its own way (`style.corner`: Harbour man, Redmoor and
+  Kestrel zonal, Coldforge two up). At half-time it switches to 4-3-3 when behind, and otherwise
+  keeps its shape.
 - **Difficulty**: Easy gives the CPU −7 to all attributes and much noisier choices
   (softmax temperature 0.028). Normal gives ±0 and 0.011. Hard gives +4 and 0.006.
 
@@ -306,7 +343,7 @@ Proposed after the mobile release. Counter-attacks and line height came from the
 list and were built in devlog cycle 5.
 
 - **A CPU that plans for dribbles** (jockeying itself is part of Cover).
-- **Set-piece choices:** short, near-post or far-post corners; short or long goal kicks.
-- **Half-time changes:** one decision on formation or attitude.
+- **Set-piece choices:** short or long goal kicks (corners were built in cycle 6).
+- **Half-time attitude:** a change of risk or pressing as well as shape (the shape change was built in cycle 6).
 - **Pressing fatigue:** players who press or tackle a lot lose some pace late on.
 - **Penalty memory:** takers and keepers develop habits that can be read.

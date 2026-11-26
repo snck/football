@@ -152,11 +152,7 @@
     }
     if (evs.includes('fulltime')) { window.Sound.play('whistle3'); await report('full'); }
     if (evs.includes('added')) window.Sound.play('cheer');
-    if (evs.includes('lastAttack')) {
-      window.Sound.play('whistle');
-      const la = FB.lastAttack(m);
-      flashHint(`Time is up, but ${la.team === HUMAN ? 'you get' : 'they get'} to finish this attack: play goes on until the ball is lost, goes out or is scored (at most ${FB.TUNE.lastAttack.beats} more turns).`);
-    }
+    if (evs.includes('lastAttack')) window.Sound.play('whistle');
   }
 
   async function attackPhase(token, counterStart) {
@@ -455,7 +451,7 @@
     const pv = a.type === 'shoot' ? ev.shot.goal * 2.2 : a.type === 'clear' ? 0.5 : ev.p;
     const label = a.type === 'shoot' ? (ev.shot.goal > 0.3 ? 'Big chance' : ev.shot.goal > 0.12 ? 'Decent chance' : ev.shot.goal > 0.05 ? 'Half chance' : 'Speculative') : a.type === 'clear' ? 'Safety first' : riskWord(ev.p);
     const failTxt = { pass: 'If it fails: turnover where it is cut out.', through: 'If it fails: they win it and can counter.', lob: ev.header ? 'If it fails: cleared, maybe a corner.' : 'If it fails: they win the header.', dribble: 'If it fails: dispossessed, and you are out of position.', shoot: 'If it misses: goal kick, a corner or a rebound.', clear: '' }[a.type];
-    return `<div class="lbl">${head}</div><div><span class="big ${riskClass(pv)}">${big}</span> <span class="${riskClass(pv)}">${label}</span></div>${pre}<ul>${lines.map((l) => `<li>${l}</li>`).join('')}</ul>${failTxt ? `<div class="muted">${failTxt}</div>` : ''}`;
+    return `<div class="lbl">${head}</div>${pre}<div><span class="big ${riskClass(pv)}">${big}</span> <span class="${riskClass(pv)}">${label}</span></div><ul>${lines.map((l) => `<li>${l}</li>`).join('')}</ul>${failTxt ? `<div class="muted">${failTxt}</div>` : ''}`;
   }
   /** One line on how the defending side's line height changes these odds (null when it doesn't). */
   function lineNote(a, ev) {
@@ -486,7 +482,7 @@
       if (!a) {
         const rule = UI.quick ? `<div>${FB.isCounter(UI.m) ? 'Counter-attack' : 'First-time'}: −${quickPct()} accuracy, no dribbling.</div>` : '';
         $('preview').innerHTML = `<div class="lbl">${labelOf({ type: UI.mode })}</div>${rule}<div class="muted">${modeHelp(UI.mode)}</div>`;
-      } else $('preview').innerHTML = (UI.sel ? `<div class="lbl" style="color:#4fc3f7">${tx('Selected — click again or Enter', 'Selected — tap again or press Commit')}</div>` : '') + describeAction(a, UI.prevEval);
+      } else $('preview').innerHTML = (UI.sel && a.type !== 'shoot' ? `<div class="lbl" style="color:#4fc3f7">${tx('Selected — click again or Enter', 'Selected — tap again or press Commit')}</div>` : '') + describeAction(a, UI.prevEval);
       setButtons(UI.sel && UI.prevEval && UI.prevEval.valid ? `Commit ${labelOf(UI.sel)} (Enter)` : 'Select an action first',
         UI.quick ? 'Take a touch (Space)' : canCancel() && isTouch() ? 'Cancel' : null);
       $('btnGo').disabled = !(UI.sel && UI.prevEval && UI.prevEval.valid);
@@ -832,7 +828,11 @@
     if (go) g.textContent = go;
     if (alt) a.textContent = alt;
   }
-  function hint(t) { $('hint').innerHTML = t; UI.hintBase = t; }
+  function hint(t) {
+    const la = UI.m && FB.lastAttack(UI.m);
+    if (la) t = `<b>Last attack:</b> time is up, but ${la.team === HUMAN ? 'you get' : 'they get'} to finish this move. Play goes on until the ball is lost, goes out or is scored (at most ${FB.TUNE.lastAttack.beats} turns). ${t}`;
+    $('hint').innerHTML = t; UI.hintBase = t;
+  }
   function flashHint(t) {
     $('hint').innerHTML = `<span style="color:#ff8a65">${t}</span>`; clearTimeout(UI.hintT); UI.hintT = setTimeout(() => { $('hint').innerHTML = UI.hintBase || ''; }, 2500);
     // compact layouts hide the hint bar: show the message on the pitch instead
