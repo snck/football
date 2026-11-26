@@ -15,8 +15,8 @@ when the cycle is done.
 | 3 | A. Cover / jockey | **done** (user dropped the chain-share target, see "Phase 3 result") |
 | 4 | B. Lasting marks, costlier trap | **done** (mark target missed, user accepted it, see "Phase 4 result") |
 | 5 | C. Teammate runs | **done** (user dropped the +0.15 run target, see "Phase 5 result") |
-| 6 | D. Through balls (variety only; may be dropped after 3–5) | todo, **next** (through is 36.1% of actions, so it goes ahead) |
-| 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo |
+| 6 | D. Through balls (variety only; may be dropped after 3–5) | **built**, waiting on the user about Deep (see "Phase 6 result") |
+| 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo, **next** once phase 6 is closed |
 | 8 | Final docs, full balance pass, ask about publishing | todo |
 
 Update this table and the log at the bottom at the end of every phase.
@@ -59,7 +59,10 @@ Standing rules:
 | 985 (policies), 986 (diag), 987 (mirror), 988 (balance) ×10⁶; sim 44 | phase 4 hold-out, both engines |
 | 990, 991 ×10⁶ | phase 5 tuning |
 | 995 (policies), 996 (diag) ×10⁶; sim 44 again | phase 5 hold-out, both engines |
-| **1000000000+ unused** | |
+| 1000 (diag), 1001 (policies), 1002 (soft-pass count) ×10⁶ | phase 6 tuning |
+| 1010 (diag), 1011 (policies), 1012 (mirror), 1013 (balance) ×10⁶; sim 45 | phase 6 hold-out, both engines (1012 then showed the first version's line problem) |
+| 1015 ×10⁶ (mirror) | phase 6 confirmation of the final rule, both engines |
+| **1020000000+ unused** | |
 
 ### Tools added for this cycle
 
@@ -481,6 +484,75 @@ separately, keeping every "… first" habit at or below greedy:
 2. Passes to feet of up to 15 m to a receiver with pressure under 0.25: next first-time penalty 0.03 instead of 0.05
    (store on `m`, show in UI text, respect the quick rule in CLAUDE.md).
 
+### Phase 6 result (2026-11-26)
+
+Built, both items:
+1. **Facing defenders.** `TUNE.turnReact` 0.8, `TUNE.faceReact` 0.45. An outfield defender nearer his own goal than the target is (distance
+   to goal, as in the press and cover rules) gets 0.45 s, others 0.8 s; the line's `react` and the trap's 0.4 s are added to either. `evaluate`
+   returns `facing`, and the preview says "X is goal-side of it, facing the play: reacts 0.35s sooner". The high-line note now reads "caught
+   upfield" (it applies to facing defenders too).
+2. **Soft pass.** `TUNE.softPass` = { max 15 m, pressure 0.25, penalty 0.03 }. `m.softPass` is set in the `resolveAttack` wrapper after a
+   completed pass that met it (`FB.isSoftPass(ev)`, pressure as shown, marks included), cleared at the start of every beat and on turnovers,
+   so a counter always plays at 5%. `evaluate` reads `FB.quickPenalty(m)`. The pass preview names it when a first-time ball could follow; the
+   first-time banner and the mode help show the penalty in force. No beat loop changed; a hypothetical plan never touches it, so not in the snapshot.
+
+**First version and why it changed.** The first build let a facing defender ignore his line's `react` (deep kept its 0.4 s). On the hold-out
+it moved the lines a lot: High − Normal +0.083 → **+0.139**, Deep − Normal −0.039 → **−0.158** (16,000 mirror matches each, 1012000000, ±0.04):
+High defenders facing the ball lost their 0.5 s handicap and Deep lost its edge over Normal. The final rule adds the line's `react` to both cases,
+which is the spec's literal reading. Confirmed on fresh seeds (16,000 each, 1015000000, same seeds both engines):
+
+| | Before | After |
+|---|---|---|
+| High − Normal | +0.067 ±0.041 | +0.074 ±0.041 |
+| Deep − Normal | −0.054 ±0.039 | **−0.120 ±0.039** |
+
+Deep is worse by 0.066 (±0.055 for the difference), so this probably is real; the phase 2 target was Deep within about 0.1. Not diagnosed.
+A guess: Deep's edge is against through balls, and there are fewer of them now. Not tuned: line constants were the user's call in phase 2.
+
+Measured separately on tuning seeds (diag 1,000 on 1000000000; policies 2,000 per row on 1001000000, ±0.06). This used the first version of item 1,
+whose only difference is on the Deep line:
+
+| | Before | Item 1 | Items 1 + 2 |
+|---|---|---|---|
+| through share of actions (midfield) | 36.2% (43.8%) | 31.3% (38.7%) | 31.3% (38.7%) |
+| goals/match | 2.53 | 2.39 | 2.41 |
+| CPU brain / greedy | 1.37 / 1.86 | 1.33 / 1.88 | 1.34 / 1.87 |
+| through / pass / lob / dribble first | 1.46 / 1.78 / 1.10 / 1.68 | 1.37 / 1.80 / 1.27 / 1.62 | 1.37 / 1.80 / 1.27 / 1.63 |
+
+Item 2 changes nothing measurable in CPU play: the CPU looks one action ahead and doesn't see the cheaper follow-up, and the rule fires about 4.1
+times a match, 2.5 of them followed by a first-time ball (200 matches, 1002000000). It's a small, visible reward for a human who plays short.
+
+Hold-out, final rule (policies 4,000 per row on 1011000000, ±0.04; diag 2,000 on 1010000000; same seeds before and after):
+
+| | Before | After |
+|---|---|---|
+| CPU brain | 1.37 | 1.35 |
+| greedy attack | 1.90 | 1.89 |
+| through / pass / lob / dribble first | 1.50 / 1.76 / 1.16 / 1.63 | **1.45** / 1.78 / 1.21 / 1.65 |
+| always take a touch | 0.93 | 0.91 |
+| press + mark + trap | 1.21 | 1.17 |
+| hold shape always | 0.66 | 0.63 |
+| through share of actions (midfield) | 36.2% (43.7%) | **32.4% (39.7%)** |
+| pass / lob / dribble / shoot share | 21.3 / 17.5 / 15.9 / 8.9% | 23.3 / 18.6 / 16.7 / 8.7% |
+| goals/match; first-time chain share | 2.51; 49.4% | 2.40; 48.7% |
+
+| Target | Result | |
+|---|---|---|
+| Every "… first" habit at or below greedy | all at least 0.11 below (pass first 1.78 v 1.89) | met |
+| Fewer through balls (variety) | 36.2 → 32.4% of actions; still over the 30% that would have skipped the phase | partly |
+| CPU v CPU goals/team 1.10–1.35 | `sim 1000 45` 1.24 → 1.19, `sim 300 11` 1.26 → 1.21, `balance 1000 1013000000` 1.251 → 1.211 | met |
+| Clubs within ±0.06 of the mean | ±0.032 at most (before: Harbour +0.046, Redmoor −0.042), 12,000 matches, ±0.033 | met |
+| One-note exploits lose | thoughtful 167-55-78; shoot on sight 78-92-130, dribble only 100-93-107, hoof 39-101-160, safest pass 0-152-148, park the bus 36-52-212, always tackle/press 80-67-153, high line + trap 57-53-190 | met (dribble only is close: 100 v 107) |
+| Timing ≤ 19.5 min | 18.6 | met |
+| Lines (phase 2: High within ±0.05, Deep within about 0.1) | High +0.074 (+0.067 before), Deep **−0.120** | High as before; Deep missed |
+
+Calibration within 1.1 points everywhere (through 63.4/63.4, pass 79.4/79.4, shot 13.9/13.9); loose balls within 2.0. Plans unchanged within 0.5 points.
+Speed unchanged (`sim 1000 45` 224 s before, 228 s after, machine busy). Engine tests 46 → 48. Browser: headless Chrome at desktop, 375×667 and 667×375
+showed the facing line, the soft-pass line, the "−3% (a short pass set it up)" banner and the touch preview rule, no console errors, no sideways scroll.
+
+**Open question for the user:** Deep − Normal is now −0.12. Options: accept it (Deep stays a situational choice, the CPU only goes deep when leading
+late), or a small Deep re-tune in phase 8's balance pass (for example its `aerial` or `ownThird`), measured on new seeds.
+
 ## Phase 7: extras (independent, each its own commit)
 
 1. **Shot type:** `shoot` gains `kind`: placed (default, today's numbers), driven (better from over 18 m, more blocks and
@@ -560,3 +632,6 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   defence panel; no console errors. DESIGN, README, how-to text and CLAUDE.md are current; DEVLOG entry waits for phase 8. Waiting for the user to decide
   on the missed targets before phase 6.
 - 2026-11-26: the user kept runs as they are and dropped the +0.15 target. Phase 5 closed; documentation only, no game code changed.
+- 2026-11-26: phase 6, see "Phase 6 result" above. The user asked for the next phase. The first build of the facing rule skipped the line's react and
+  put Deep 0.16 behind Normal on the hold-out; the final rule adds it, as the spec said. Deep is still 0.12 behind (was 0.05): waiting for the user.
+  DESIGN, README, how-to text are current (README still calls Deep "slightly weaker"); DEVLOG entry waits for phase 8. No CLAUDE.md change needed.

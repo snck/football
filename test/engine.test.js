@@ -708,6 +708,65 @@ test('counter-attack: at most two per beat (no endless ping-pong)', () => {
   }
 });
 
+test('through ball: a defender already goal-side of the target reacts faster, on every line height', () => {
+  const m = fresh(16);
+  clearPitch(m);
+  give(m, 7, 55, 34);
+  m.players[9].x = 66; m.players[9].y = 30;
+  const a = { type: 'through', target: { x: 76, y: 30 }, runner: 9 };
+  const gap = FB.TUNE.turnReact - FB.TUNE.faceReact;
+  for (const line of ['deep', 'normal', 'high']) {
+    m.lines[1] = line;
+    m.players[13].x = 72; m.players[13].y = 38; // behind the target: has to turn
+    const behind = FB.evaluate(m, a);
+    assert.equal(behind.chaser, 13); assert.equal(behind.facing, false);
+    m.players[13].x = 80; m.players[13].y = 38; // same distance to the spot, but goal-side of it
+    const front = FB.evaluate(m, a);
+    assert.equal(front.chaser, 13); assert.equal(front.facing, true);
+    assert.ok(Math.abs(behind.defT - front.defT - gap) < 1e-9, `${line}: ${behind.defT} vs ${front.defT}`);
+    assert.ok(front.pRace < behind.pRace);
+    assert.equal(front.lineReact, FB.TUNE.line[line].react);
+    assert.ok(Math.abs(sumP(front) - 1) < 1e-9);
+  }
+});
+
+test('first-time penalty: smaller after a short pass to a free receiver, normal after a long or pressed one or a counter', () => {
+  const pen = (setup) => {
+    const m = fresh(17);
+    clearPitch(m);
+    give(m, 7, 40, 34);
+    setup(m);
+    m.rng = () => 0.01;
+    const ev = FB.evaluate(m, { type: 'pass', to: 9 });
+    const r = FB.resolveAttack(m, { type: 'pass', to: 9 });
+    return { m, r, ev };
+  };
+  const short = pen((m) => { m.players[9].x = 52; m.players[9].y = 34; });
+  assert.equal(short.r.result, 'ok');
+  assert.ok(FB.isSoftPass(short.ev) && short.m.softPass);
+  FB.startQuick(short.m);
+  assert.equal(FB.quickPenalty(short.m), FB.TUNE.softPass.penalty);
+  // the first-time ball's accuracy carries the smaller penalty: compare with the same position and the normal one
+  const T = { type: 'pass', to: 10 };
+  short.m.players[10].x = 62; short.m.players[10].y = 30;
+  const soft = FB.evaluate(short.m, T).exec;
+  short.m.softPass = false;
+  assert.ok(Math.abs(soft - FB.evaluate(short.m, T).exec - (FB.TUNE.quickPenalty - FB.TUNE.softPass.penalty)) < 1e-9);
+  const long = pen((m) => { m.players[9].x = 60; m.players[9].y = 34; });
+  assert.equal(long.r.result, 'ok'); assert.equal(long.m.softPass, false);
+  const pressed = pen((m) => { m.players[9].x = 52; m.players[9].y = 34; m.players[13].x = 53.5; m.players[13].y = 34.5; });
+  assert.ok(pressed.ev.recvPressure >= FB.TUNE.softPass.pressure);
+  if (pressed.r.result === 'ok') assert.equal(pressed.m.softPass, false);
+  // a turnover clears it: the counter plays under the normal penalty
+  const cut = pen((m) => { m.players[9].x = 52; m.players[9].y = 34; });
+  cut.m.players[10].x = 64; cut.m.players[10].y = 34; cut.m.players[16].x = 58; cut.m.players[16].y = 34;
+  assert.ok(cut.m.softPass);
+  FB.startQuick(cut.m);
+  assert.equal(FB.resolveAttack(cut.m, { type: 'pass', to: 10 }).result, 'intercepted');
+  assert.ok(FB.isCounter(cut.m));
+  assert.equal(cut.m.softPass, false); assert.equal(FB.quickPenalty(cut.m), FB.TUNE.quickPenalty);
+});
+
 test('line height: a deep block blocks more shots, a high line loses more races in behind', () => {
   const m = fresh(15);
   clearPitch(m);

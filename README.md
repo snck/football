@@ -50,7 +50,7 @@ don't. Nothing is ever timed.
 | Key | Action | How |
 |---|---|---|
 | `1` | **Pass** | Click a teammate. Every teammate shows a % badge. |
-| `2` | **Through ball** | Click space ahead of a runner. He races the defenders and keeper to it. |
+| `2` | **Through ball** | Click space ahead of a runner. He races the defenders and keeper to it. A defender who has to turn reacts in 0.8 s, one already goal-side of the spot in 0.45 s, so aim behind them. |
 | `3` | **Lofted / cross** | Click a teammate or a spot. It goes over the lines but is contested in the air. Into the box from wide, it becomes a cross and a header at goal. |
 | `4` | **Dribble** | Click inside the ring. Defenders near your path may tackle (or foul you; in the box that's a penalty). |
 | `5` | **Shoot** | Shows your goal chance, block risk and on-target odds first. |
@@ -59,7 +59,8 @@ don't. Nothing is ever timed.
 Click once to preview, then click again (or press `Enter`) to commit. `Esc` cancels.
 
 **Quick play:** after a completed pass you may play **first-time** (up to 3 in a row),
-before the defence resets. It's 5% less accurate and you can't dribble. Or press
+before the defence resets. It's 5% less accurate (3% after a short pass of 15 m or less
+to a free teammate) and you can't dribble. Or press
 `Space` to **take a touch** and let everyone reorganise.
 
 **Runs:** while you have a first-time chance you can call one run for when you take a

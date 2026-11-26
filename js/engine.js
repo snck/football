@@ -16,10 +16,16 @@
     shotPressure: 0.22,    // share of the goal chance lost when shooting under full pressure
     cost: { pass: 34, through: 36, lob: 38, dribble: 31, shot: 34, tackle: 27, restart: 20, goal: 60, penalty: 50 },
     quickPenalty: 0.05, quickMax: 3, quickCost: 0.35,
+    // A short pass to feet (at most `softPass.max` m, receiver under `softPass.pressure`) sets up the next first-time
+    // ball: its accuracy penalty is `softPass.penalty` instead of `quickPenalty`.
+    softPass: { max: 15, pressure: 0.25, penalty: 0.03 },
     pressRange: 14, tackleRange: 5, pressMove: 7.5, markMove: 10,
     // A mark stays on for `markBeats` more beats: the marker follows his man instead of holding his zone (`markGap` m
     // goal-side; within `markTight` m it counts as tight and adds `markPress` to the pressure on a pass to him).
     markBeats: 2, markGap: 1.2, markTight: 2.2, markPress: 0.15,
+    // Through balls: an outfield defender needs `turnReact` s to turn and chase a ball played in behind him, but only
+    // `faceReact` s when he is already goal-side of the target, facing the play. His line's `react` is added to both.
+    turnReact: 0.8, faceReact: 0.45,
     // Offside trap: defenders who stepped up need this much longer (s) to turn and chase a ball played in behind.
     trapReact: 0.4,
     // Cover: stand off the carrier (`coverGap` m goal-side), step across (`coverSlide` m) to whoever receives the next
@@ -574,7 +580,7 @@
     m.possStreak = m.lastPossTeam === m.poss ? (m.possStreak || 0) + 1 : 0;
     m.lastPossTeam = m.poss;
     m.beatStart = { time: m.time, poss: m.poss };
-    m.quick = 0; m.quickOk = false;
+    m.quick = 0; m.quickOk = false; m.softPass = false;
     m.counter = false; m.counterOk = false; m.counters = 0;
     m.defAct = null;
     const tl = [];
@@ -892,7 +898,7 @@
     if (!c) return { valid: false, reason: 'No carrier' };
     const allowed = FB.allowedActions(m);
     if (a.type !== 'clear' && !allowed[a.type === 'cross' ? 'lob' : a.type]) return { valid: false, reason: 'Not allowed from this restart' };
-    const mom = (c.team === 0 ? m.momentum : -m.momentum) * 0.02 - (m.quick ? TUNE.quickPenalty : 0);
+    const mom = (c.team === 0 ? m.momentum : -m.momentum) * 0.02 - (m.quick ? FB.quickPenalty(m) : 0);
     const pc = pressureOn(m, c);
     const sp = m.setPiece && m.setPiece.type;
     const SC = TUNE.loose.scatter;
@@ -943,16 +949,20 @@
       const ballT = dP / 18 + 0.1;
       const runStart = m.runMade && m.runMade.kind === 'behind' && m.runMade.id === r.id && !m.quick ? TUNE.runStart : 0;
       const runT = Math.max(0, dRun / (speed(r) * 1.08) - runStart);
-      let defT = 99, chaser = null;
+      let defT = 99, chaser = null, facing = false;
       const lineReact = lineFx(m, opp(c.team)).react;
+      const dGoal = ownGoal(opp(c.team)), tGoal = dist(T, dGoal);
       for (const o of active(m, opp(c.team))) {
         if (m.beaten.has(o.id)) continue;
-        let tt;
+        let tt, face = false;
         if (o.role === 'GK') {
           if (!FB.inOppBox(rel(c.team, T))) continue;
           tt = dist(o, T) / 6.2 + 0.25 - (o.attrs.gk - 70) * 0.004;
-        } else tt = dist(o, T) / speed(o) + 0.8 + lineReact + (m.trapped && m.trapped.has(o.id) ? TUNE.trapReact : 0);
-        if (tt < defT) { defT = tt; chaser = o; }
+        } else {
+          face = dist(o, dGoal) < tGoal; // goal-side of the target: he needn't turn
+          tt = dist(o, T) / speed(o) + (face ? TUNE.faceReact : TUNE.turnReact) + lineReact + (m.trapped && m.trapped.has(o.id) ? TUNE.trapReact : 0);
+        }
+        if (tt < defT) { defT = tt; chaser = o; facing = face; }
       }
       const arrive = Math.max(ballT, runT);
       const pRace = sigmoid((defT - arrive) / 0.32);
@@ -970,7 +980,7 @@
       outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.throughMiss) });
       outcomes.push({ p: exec * lane.p, k: 'lose', pos: lane.list[0] ? lane.list[0].q : T });
       return { valid: true, type: 'through', p: pSucc, exec, lane, pRace, ctrl, offP, runner: r.id, chaser: chaser && chaser.id,
-        runT, runStart, defT, ballT, d: dP, outcomes, target: T, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0,
+        runT, runStart, defT, ballT, d: dP, outcomes, target: T, facing, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0,
         trapReact: chaser && m.trapped && m.trapped.has(chaser.id) ? TUNE.trapReact : 0, threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id).concat(chaser ? [chaser.id] : []) };
     }
     if (a.type === 'lob' || a.type === 'cross') {
@@ -1103,6 +1113,7 @@
 
   function turnover(m, newP, how) {
     m.lastPasser = null;
+    m.softPass = false;
     m.cover = null;
     m.trapped = null;
     m.markOrders = [null, null];
@@ -1305,6 +1316,7 @@
   /** Resolve the attacking action; mutates state; returns {tl, result} */
   FB.resolveAttack = function (m, a) {
     const out = resolveAttackInner(m, a);
+    m.softPass = out.result === 'ok' && FB.isSoftPass(out.ev);
     catchPresser(m);
     catchTrapped(m, a, out.result);
     coverSlide(m, out.tl);
@@ -1599,6 +1611,10 @@
     m.carrier = null;
   }
 
+  /** Accuracy penalty on a first-time or counter action now: smaller straight after a short pass to a free receiver. */
+  FB.quickPenalty = (m) => (m.softPass ? TUNE.softPass.penalty : TUNE.quickPenalty);
+  /** Is this evaluated pass short and to an unpressed receiver, so the next first-time ball is easier? */
+  FB.isSoftPass = (ev) => !!ev && ev.type === 'pass' && ev.d <= TUNE.softPass.max && ev.recvPressure < TUNE.softPass.pressure;
   /** After a completed pass the receiver may play first-time, before the defence resets. */
   FB.canQuick = (m) => !m.over && m.carrier != null && !m.restart && (!!m.counterOk || (!!m.quickOk && m.quick < TUNE.quickMax));
   /** True when the next quick action is a counter-attack (ball just won), not a first-time pass. */

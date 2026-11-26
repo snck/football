@@ -5,6 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const { L, W } = FB.P;
   const pct = (p) => `${Math.round(p * 100)}%`;
+  const quickPct = () => pct(FB.quickPenalty(UI.m)); // first-time accuracy penalty right now
   const HUMAN = 0, CPU = 1;
   /** Touchscreen (finger) input: tap wording, bigger tap targets, no keyboard hints. */
   const isTouch = () => !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
@@ -223,8 +224,8 @@
     UI.run = null; UI.runKind = null;
     // on a phone the first-time rule goes in the preview box instead, so the run row fits on one line
     $('extra').innerHTML = isTouch() && quick ? ''
-      : counter ? '<span>You won it! Break before they regroup: first-time rules (−5% accuracy, no dribbling). <b>Space</b> = take a touch instead.</span>'
-      : quick ? '<span>Playing first-time: −5% accuracy, no dribbling. <b>Space</b> = take a touch instead.</span>'
+      : counter ? `<span>You won it! Break before they regroup: first-time rules (−${quickPct()} accuracy, no dribbling). <b>Space</b> = take a touch instead.</span>`
+      : quick ? `<span>Playing first-time: −${quickPct()} accuracy${m.softPass ? ' (a short pass set it up)' : ''}, no dribbling. <b>Space</b> = take a touch instead.</span>`
       : (UI.cpuPlanText ? `<span>Opponent: ${UI.cpuPlanText}</span>` : '');
     if (quick) buildRunRow();
     setMode(UI.mode, true);
@@ -362,6 +363,7 @@
       big = pct(ev.p);
       lines.push(`Race: ${nm(ev.runner)} ${ev.runT.toFixed(1)}s vs ${ev.chaser != null ? nm(ev.chaser) : 'nobody'} ${ev.defT < 50 ? ev.defT.toFixed(1) + 's' : ''} → wins ${pct(ev.pRace)}`);
       lines.push(`Accuracy ${pct(ev.exec)} · lane ${ev.lane.p > 0.03 ? pct(ev.lane.p) + ' intercept risk' : 'clear'}`);
+      if (ev.facing) lines.push(`${nm(ev.chaser)} is goal-side of it, facing the play: reacts ${+(FB.TUNE.turnReact - FB.TUNE.faceReact).toFixed(2)}s sooner than if he had to turn`);
       if (ev.trapReact) lines.push(`${nm(ev.chaser)} stepped up for the trap: +${ev.trapReact}s to turn`);
       if (ev.runStart) lines.push(`${nm(ev.runner)} is already running in behind: ${ev.runStart}s head start`);
       const tr = FB.rel(HUMAN, ev.target);
@@ -395,6 +397,9 @@
       lines.push(`Hoofs the ball ~40 m upfield, out of danger. A teammate gets to it first ${pct(keep)} of the time.`);
       if (ev.charge.p > 0.02) lines.push(`Charge-down risk ${pct(ev.charge.p)}`);
     }
+    if (a.type === 'pass' && FB.isSoftPass(ev) && m.quick < FB.TUNE.quickMax) {
+      lines.push(`Short and to feet, no one near ${nm(ev.recv)}: a first-time ball after it loses only ${pct(FB.TUNE.softPass.penalty)} accuracy (not ${pct(FB.TUNE.quickPenalty)})`);
+    }
     if (m.cover && !m.cover.used && m.quick < FB.TUNE.quickMax && (a.type === 'pass' || a.type === 'through' || a.type === 'lob' && !ev.header)) {
       lines.push(`${nm(m.cover.id)} is covering: if this comes off he slides up to ${FB.TUNE.coverSlide} m towards ${nm(ev.recv != null ? ev.recv : ev.runner)}`);
     }
@@ -414,7 +419,7 @@
     if (line === 'normal') return null;
     const deep = line === 'deep';
     const secs = (x) => String(+Math.abs(x).toFixed(2));
-    if (a.type === 'through' && ev.lineReact) return deep ? `Their deep line is already set: defenders react ${secs(ev.lineReact)}s sooner` : `Their high line has to turn and chase: +${secs(ev.lineReact)}s for defenders`;
+    if (a.type === 'through' && ev.lineReact) return deep ? `Their deep line is already set: defenders react ${secs(ev.lineReact)}s sooner` : `Their high line is caught upfield: +${secs(ev.lineReact)}s for defenders`;
     if (a.type === 'lob' && ev.aerial) return deep ? 'Their deep block is packed in the box: harder to win it in the air' : 'Their high line is running back: easier to win it in the air';
     if (a.type === 'shoot' && ev.shot.lineBlock !== 1 && !(m.setPiece && m.setPiece.type === 'freekick')) return deep ? 'Their deep block puts bodies in the way: more shots get blocked' : 'Their high line has fewer bodies back: fewer blocks';
     if (a.type === 'pass') {
@@ -433,7 +438,7 @@
       UI.prevAction = a;
       UI.prevEval = a ? FB.evaluate(m, a) : null;
       if (!a) {
-        const rule = UI.quick ? `<div>${FB.isCounter(UI.m) ? 'Counter-attack' : 'First-time'}: −5% accuracy, no dribbling.</div>` : '';
+        const rule = UI.quick ? `<div>${FB.isCounter(UI.m) ? 'Counter-attack' : 'First-time'}: −${quickPct()} accuracy, no dribbling.</div>` : '';
         $('preview').innerHTML = `<div class="lbl">${labelOf({ type: UI.mode })}</div>${rule}<div class="muted">${modeHelp(UI.mode)}</div>`;
       } else $('preview').innerHTML = (UI.sel ? `<div class="lbl" style="color:#4fc3f7">${tx('Selected — click again or Enter', 'Selected — tap again or press Commit')}</div>` : '') + describeAction(a, UI.prevEval);
       setButtons(UI.sel && UI.prevEval && UI.prevEval.valid ? `Commit ${labelOf(UI.sel)} (Enter)` : 'Select an action first',

@@ -73,7 +73,9 @@ eats more clock than quick play in the final third.
    commentary and a "why" caption explain what happened and what the odds were.
 5. **Quick play (first-time).** After a *completed* pass, the receiver may act again
    immediately, before the defence resets. There is no shape step and no defensive
-   decision, but accuracy drops by 5% and dribbling isn't allowed. You can chain up to
+   decision, but accuracy drops by 5% and dribbling isn't allowed. After a short pass
+   to feet (15 m or less, receiver under 0.25 pressure) the drop is only 3%, and the
+   preview of such a pass says so. You can chain up to
    3 of these. Or you can **take a touch** (Space), which ends the beat and lets both
    teams reorganise.
    *Why:* see devlog cycle 1. Each beat allowing only one action made football too
@@ -134,7 +136,12 @@ the odds you see are the real odds.
   there (reach grows with ball travel time). Long passes past nearby defenders are
   much riskier than short ones.
 - **Through-ball race**: runner arrival time vs the best defender or keeper arrival
-  time, put through a sigmoid.
+  time, put through a sigmoid. An outfield defender needs 0.8 s to turn and chase a ball
+  played in behind him, but only 0.45 s when he's already goal-side of the target and
+  facing the play. His line's head start (table below) is added to either. The preview
+  says when the chaser is facing it.
+  *Why:* through balls were 36% of all actions and 44% in midfield, often aimed at space in
+  front of a defender as if he had to turn. With this rule they are 32% (cycle 6, phase 6).
 - **Aerial duel**: arrival times plus heading skill. The keeper claims crosses that
   drop in their area.
 - **xG**: a distance curve fitted to typical values (about 0.42 from 11 m, 0.19 from
@@ -154,9 +161,10 @@ the odds you see are the real odds.
   | Lane-interception reach, defenders in the middle third | ×1 | ×1 | ×1.15 |
   | Head start (s) in aerial duels inside their own box | +0.25 | 0 | −0.1 |
 
-  Overall, High is about level with Normal and Deep is slightly weaker. In mirror matches (same club on
-  both sides, CPU play) High takes 0.056 ±0.041 points per match more than Normal and Deep 0.072 ±0.039 fewer,
-  over 16,000 matches each.
+  Overall, High is about level with Normal and Deep is weaker. In mirror matches (same club on
+  both sides, CPU play) High takes 0.074 ±0.041 points per match more than Normal and Deep 0.120 ±0.039 fewer,
+  over 16,000 matches each (seeds 1015000000+, after the through-ball change in cycle 6 phase 6; before it,
+  +0.067 and −0.054 on the same seeds).
 
 - **Loose balls** (misplaced passes, bad touches, heavy touches, clearances) go to whoever
   gets there first: distance over speed, plus some luck. `evaluate` estimates who that will
