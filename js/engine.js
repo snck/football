@@ -51,6 +51,10 @@
     loose: { noise: 0.9, down: 0.8, reach: 1,
       scatter: { passMiss: 8, passTouch: 3.5, throughMiss: 12, throughTouch: 4, lobMiss: 12, lobTouch: 4, dribble: 3, clear: 10 } },
     counterMax: 2,         // counter-attacks allowed per beat (stops endless ping-pong)
+    // Player traits (two or three per club, see FB.TEAMS). aerial: `duel` added to his side of every aerial duel (about 10
+    // points of heading). longPasser: a through ball or lofted pass longer than `from` m loses accuracy at `cut` times the
+    // usual rate beyond that. dribbler: `touch` less heavy-touch risk, and challengers' tackle chance × `tackle`.
+    traits: { aerial: { duel: 0.3 }, longPasser: { from: 25, cut: 0.5 }, dribbler: { touch: 0.02, tackle: 0.85 } },
     // Last attack: when time is up and a team is on the ball past `fromX` m (its own frame), or has a corner or a free kick
     // past `fkX` m, the referee lets it finish: play on until the ball is lost, out, scored or played back behind `backX` m,
     // for at most `beats` beats. A penalty is always taken.
@@ -853,6 +857,12 @@
       held: save[0], pushed: save[1], rebound: 1 - save[0] - save[1] };
   }
   FB.shotModel = shotModel;
+  /** Metres of distance that count against a long ball's accuracy (a long passer loses less beyond `from` m). */
+  function longDist(c, d) {
+    const T = TUNE.traits.longPasser;
+    return c.trait === 'longPasser' && d > T.from ? T.from + (d - T.from) * T.cut : d;
+  }
+  const traitDuel = (p) => (p && p.trait === 'aerial' ? TUNE.traits.aerial.duel : 0);
   /** How a team defends corners from now on: 'man', 'zonal' or 'up2' (two left upfield). Returns false if not allowed. */
   FB.setCornerDef = function (m, team, def) {
     if (!TUNE.corner.defs.includes(def) || (team !== 0 && team !== 1)) return false;
@@ -1027,7 +1037,7 @@
       const arrive = Math.max(ballT, runT);
       const pRace = sigmoid((defT - arrive) / 0.32);
       const lane = laneRisk(m, c, T, c.team, 16, { to: r.id, endT: 0.8, exclude: chaser ? new Set([chaser.id]) : null });
-      const exec = clamp(0.985 - 0.003 * dP - 0.08 * pc + (c.attrs.pass - 70) * 0.004 + mom, 0.45, 0.975);
+      const exec = clamp(0.985 - 0.003 * longDist(c, dP) - 0.08 * pc + (c.attrs.pass - 70) * 0.004 + mom, 0.45, 0.975);
       const ctrl = clamp(0.92 + (r.attrs.dribble - 70) * 0.002 - (runT > ballT + 1 ? 0.08 : 0), 0.6, 0.97);
       const pClean = exec * (1 - lane.p);
       const on = 1 - offP;
@@ -1040,7 +1050,7 @@
       outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.throughMiss) });
       outcomes.push({ p: exec * lane.p, k: 'lose', pos: lane.list[0] ? lane.list[0].q : T });
       return { valid: true, type: 'through', p: pSucc, exec, lane, pRace, ctrl, offP, runner: r.id, chaser: chaser && chaser.id,
-        runT, runStart, defT, ballT, d: dP, outcomes, target: T, facing, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0,
+        runT, runStart, defT, ballT, d: dP, outcomes, target: T, facing, long: c.trait === 'longPasser' && dP > TUNE.traits.longPasser.from, lineReact: chaser && chaser.role !== 'GK' ? lineReact : 0,
         trapReact: chaser && m.trapped && m.trapped.has(chaser.id) ? TUNE.trapReact : 0, threats: lane.list.filter((x) => x.p > 0.05).map((x) => x.id).concat(chaser ? [chaser.id] : []) };
     }
     if (a.type === 'lob' || a.type === 'cross') {
@@ -1074,7 +1084,7 @@
       }
       let pWin;
       if (tD > hang + 0.7 && tA <= hang + 0.3) pWin = 0.95;
-      else pWin = clamp(sigmoid((tD - tA) / 0.45 + (r.attrs.head - (duel ? duel.attrs.head : 60)) * 0.03), 0.05, 0.95);
+      else pWin = clamp(sigmoid((tD - tA) / 0.45 + (r.attrs.head - (duel ? duel.attrs.head : 60)) * 0.03 + traitDuel(r) - traitDuel(duel)), 0.05, 0.95);
       const Tr = rel(c.team, T);
       let pClaim = 0;
       const gk = active(m, opp(c.team)).find((p) => p.role === 'GK');
@@ -1082,7 +1092,7 @@
         const dG = dist(gk, T);
         pClaim = clamp((Tr.x > L - 6 && Math.abs(Tr.y - 34) < 10 ? 0.75 : 0.5) - dG * 0.075 + (gk.attrs.gk - 70) * 0.005, 0, 0.75);
       }
-      const exec = clamp(0.95 - 0.003 * dP - 0.06 * pc + (c.attrs.pass - 70) * 0.004 + mom, 0.4, 0.95);
+      const exec = clamp(0.95 - 0.003 * longDist(c, dP) - 0.06 * pc + (c.attrs.pass - 70) * 0.004 + mom, 0.4, 0.95);
       const charge = laneRisk(m, c, T, c.team, 14, { endT: 0.1, maxR: 2.5 });
       const header = FB.inOppBox(Tr) && Tr.x >= 89 && sp !== 'throwin';
       const pc0 = exec * (1 - charge.p);
@@ -1109,7 +1119,7 @@
       outcomes.push({ p: 1 - exec, k: 'loose', pos: T, keep: missKeep(m, c, T, SC.lobMiss) });
       outcomes.push({ p: exec * charge.p, k: 'lose', pos: c });
       return { valid: true, type: 'lob', p: pSucc, exec, charge, pWin, pClaim, ctrl, header, shot, offP, recv: r.id, duel: duel && duel.id, aerial, corner, zonal,
-        d: dP, outcomes, target: T, threats: (duel ? [duel.id] : []).concat(pClaim > 0.1 && gk ? [gk.id] : []) };
+        d: dP, outcomes, target: T, long: c.trait === 'longPasser' && dP > TUNE.traits.longPasser.from, threats: (duel ? [duel.id] : []).concat(pClaim > 0.1 && gk ? [gk.id] : []) };
     }
     if (a.type === 'dribble') {
       const T = a.target;
@@ -1120,6 +1130,7 @@
       if (dd < 1.5) return { valid: false, reason: 'Too short' };
       const ch = [];
       let keep = 1, pFoulT = 0;
+      const dribbler = c.trait === 'dribbler';
       for (const o of active(m, opp(c.team))) {
         if (m.beaten.has(o.id) || o.role === 'GK' && !FB.inOppBox(rel(c.team, T))) continue;
         const sd = segDist(c, T, o);
@@ -1127,12 +1138,12 @@
         const R = 2.3 + (o.attrs.pace - 60) * 0.02 + (jockey ? TUNE.jockeyReach : 0);
         if (sd.d >= R) continue;
         const s = 1 - sd.d / R;
-        const pT = clamp(TUNE.drTk * s * (1 + (o.attrs.tackle - c.attrs.dribble) * 0.015), 0.02, 0.62);
+        const pT = clamp(TUNE.drTk * s * (1 + (o.attrs.tackle - c.attrs.dribble) * 0.015), 0.02, 0.62) * (dribbler ? TUNE.traits.dribbler.tackle : 1);
         const pF = TUNE.drFoul * s * (FB.inOppBox(rel(c.team, sd.q)) ? 0.6 : 1) * (jockey ? TUNE.jockeyFoul : 1);
         ch.push({ id: o.id, pT, pF, t: sd.t, q: sd.q, jockey });
       }
       ch.sort((a2, b) => a2.t - b.t);
-      const lose = clamp(0.03 + dd * 0.003 + 0.05 * pc - (c.attrs.dribble - 72) * 0.002, 0.02, 0.2);
+      const lose = clamp(0.03 + dd * 0.003 + 0.05 * pc - (c.attrs.dribble - 72) * 0.002, 0.02, 0.2) - (dribbler ? TUNE.traits.dribbler.touch : 0);
       let surv = 1 - lose;
       const outcomes = [{ p: lose, k: 'loose', pos: T, keep: keepRace(m, lerp2(c, T, 1.3), c.team, SC.dribble, -1, c, lerp2(c, T, 0.8)) }];
       for (const x of ch) {
@@ -1143,7 +1154,7 @@
       }
       keep = surv;
       outcomes.push({ p: keep, k: 'keep', pos: T, pressure: FB.pressureAt(m, c.team, T, ch), id: c.id });
-      return { valid: true, type: 'dribble', p: keep, pFoul: pFoulT, challengers: ch, lose, d: dd, outcomes, target: T, threats: ch.map((x) => x.id) };
+      return { valid: true, type: 'dribble', p: keep, pFoul: pFoulT, challengers: ch, lose, d: dd, outcomes, target: T, dribbler, threats: ch.map((x) => x.id) };
     }
     if (a.type === 'clear') {
       const cr = rel(c.team, c);

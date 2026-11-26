@@ -987,3 +987,50 @@ test('last attack: a corner at time is taken, and the ball going out again ends 
   const ev = FB.endBeat(p);
   assert.ok(!ev.includes('halftime') && !ev.includes('lastAttack'));
 });
+
+test('traits: two or three per club; a long passer, an aerial player and a dribbler each change the odds they say', () => {
+  for (const t of T) {
+    const sq = FB.buildSquad(t), n = sq.filter((p) => p.trait).length;
+    assert.ok(n >= 2 && n <= 3, t.name);
+    assert.ok(sq.every((p) => !p.trait || FB.TUNE.traits[p.trait]));
+  }
+  const m = fresh(7);
+  clearPitch(m);
+  give(m, 6, 40, 34);
+  const c = m.players[6], r = m.players[9];
+  m.players.forEach((p) => { p.trait = null; }); // Harbour's own traits would mix in
+  r.x = 72; r.y = 30;
+  const with_ = (p, trait, f) => { const old = p.trait; p.trait = trait; const v = f(); p.trait = old; return v; };
+  const thr = { type: 'through', target: { x: 74, y: 30 }, runner: 9 };
+  const a = with_(c, 'longPasser', () => FB.evaluate(m, thr)), b = with_(c, null, () => FB.evaluate(m, thr));
+  assert.ok(a.long && !b.long && a.exec > b.exec);
+  const short = { type: 'lob', to: 9 };
+  r.x = 60; r.y = 34; // 20 m: not long enough to matter
+  assert.equal(with_(c, 'longPasser', () => FB.evaluate(m, short)).exec, with_(c, null, () => FB.evaluate(m, short)).exec);
+  // aerial duel
+  r.x = 70; r.y = 34; m.players[13].x = 71; m.players[13].y = 34.5;
+  const lob = { type: 'lob', to: 9 };
+  const base = with_(r, null, () => FB.evaluate(m, lob).pWin);
+  assert.ok(with_(r, 'aerial', () => FB.evaluate(m, lob).pWin) > base);
+  assert.ok(with_(m.players[13], 'aerial', () => FB.evaluate(m, lob).pWin) < base);
+  // dribbler
+  m.players[13].x = 45; m.players[13].y = 34;
+  const dr = { type: 'dribble', target: { x: 48, y: 34 } };
+  const d1 = with_(c, 'dribbler', () => FB.evaluate(m, dr)), d0 = with_(c, null, () => FB.evaluate(m, dr));
+  assert.ok(d1.dribbler && d1.lose < d0.lose && d1.challengers[0].pT < d0.challengers[0].pT);
+  assert.ok(Math.abs(sumP(d1) - 1) < 1e-9);
+});
+
+test('club style: a club that likes crossing values a cross more; each club defends corners its own way', () => {
+  const m = fresh(8);
+  clearPitch(m);
+  give(m, 7, 92, 8);
+  m.players[9].x = 99; m.players[9].y = 31;
+  const a = { type: 'lob', target: { x: 99, y: 31 } }, ev = FB.evaluate(m, a);
+  assert.ok(ev.header);
+  const v = (cross) => FB.AI.evOf(m, a, ev, Object.assign(FB.AI.context(m, 0), { style: Object.assign({}, T[0].style, { cross }) }));
+  assert.ok(Math.abs(v(0.6) - v(0.5) - 0.1 * FB.AI.CROSS) < 1e-12);
+  const g = FB.createMatch({ home: T[3], away: T[2], seed: 1 });
+  assert.deepEqual(g.cornerDef, [T[3].style.corner, T[2].style.corner]);
+  assert.equal(FB.createMatch({ home: T[3], away: T[2], seed: 1, human: 0 }).cornerDef[0], 'man');
+});

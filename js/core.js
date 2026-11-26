@@ -89,16 +89,21 @@
     'Halloran', 'Ivanic', 'Kowal', 'Lindqvist', 'Moreau', 'Novak', 'Oduya', 'Pires', 'Rasmus', 'Sorensen', 'Tavares',
     'Vidal', 'Wexley', 'Adebayo', 'Calloway', 'Dragan', 'Esposti', 'Grieve', 'Hollis', 'Kanté-Moss', 'Mbeki-Rowe'];
 
-  // Style: risk (progress appetite 0..1), press (0..1), line, temp (decision variety)
+  // Style: risk (progress appetite 0..1), press (0..1), line, cross (how much the CPU likes crossing, 0..1), corner (how it
+  // defends corners). traits: squad slot → the one trait that player has (TUNE.traits in engine.js says what each does).
   FB.TEAMS = [
     { id: 'harbour', name: 'Harbour City', short: 'HAR', formation: '4-4-2', colors: ['#1f4fa8', '#ffffff'],
-      rating: 78, style: { risk: 0.5, press: 0.5, line: 'normal', cross: 0.5 }, blurb: 'Balanced 4-4-2. Solid, honest, good in the air.' },
+      rating: 78, style: { risk: 0.5, press: 0.5, line: 'normal', cross: 0.5, corner: 'man' }, traits: { 2: 'aerial', 9: 'aerial', 6: 'longPasser' },
+      blurb: 'Balanced 4-4-2. Solid, honest, good in the air.' },
     { id: 'redmoor', name: 'Redmoor Athletic', short: 'RED', formation: '4-3-3', colors: ['#c62828', '#fff3e0'],
-      rating: 73, style: { risk: 0.6, press: 0.75, line: 'high', cross: 0.35 }, blurb: 'High-pressing 4-3-3. Wins it high, plays fast.' },
+      rating: 73, style: { risk: 0.6, press: 0.75, line: 'high', cross: 0.35, corner: 'zonal' }, traits: { 8: 'dribbler', 10: 'dribbler', 6: 'longPasser' },
+      blurb: 'High-pressing 4-3-3. Wins it high, plays fast.' },
     { id: 'kestrel', name: 'Kestrel Vale', short: 'KES', formation: '4-2-3-1', colors: ['#2e7d32', '#f1f8e9'],
-      rating: 77, style: { risk: 0.35, press: 0.45, line: 'normal', cross: 0.3 }, blurb: 'Patient possession 4-2-3-1. Great passers.' },
+      rating: 77, style: { risk: 0.35, press: 0.45, line: 'normal', cross: 0.3, corner: 'zonal' }, traits: { 5: 'longPasser', 6: 'longPasser', 8: 'dribbler' },
+      blurb: 'Patient possession 4-2-3-1. Great passers.' },
     { id: 'coldforge', name: 'Coldforge United', short: 'COL', formation: '5-3-2', colors: ['#212121', '#ffb300'],
-      rating: 77, style: { risk: 0.7, press: 0.4, line: 'normal', cross: 0.6 }, blurb: 'Compact 5-3-2 on the counter. Fast forwards.' },
+      rating: 77, style: { risk: 0.7, press: 0.4, line: 'normal', cross: 0.6, corner: 'up2' }, traits: { 3: 'longPasser', 9: 'aerial', 10: 'dribbler' },
+      blurb: 'Compact 5-3-2 on the counter. Fast forwards.' },
   ];
 
   const ROLE_PROFILE = {
@@ -136,7 +141,7 @@
         const v = teamDef.rating + ROLE_PROFILE[role][k] + ((TEAM_BIAS[teamDef.id] || {})[k] || 0) + Math.round((r() - 0.5) * 14);
         attrs[k] = FB.clamp(v, 20, 95);
       }
-      return { slot: i, role, u: s[0], v: s[1], num, name, first, attrs };
+      return { slot: i, role, u: s[0], v: s[1], num, name, first, attrs, trait: (teamDef.traits || {})[i] || null };
     });
     SQUADS[teamDef.id] = squad;
     return FB.buildSquad(teamDef);

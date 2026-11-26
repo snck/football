@@ -27,6 +27,7 @@
   };
   window.UI = UI; // handy for debugging / automated playtests
 
+  const TRAIT_NAME = { aerial: 'strong in the air', longPasser: 'long passer', dribbler: 'dribbler' };
   // ------------------------------------------------------------------ menu
   function buildMenu() {
     const tp = $('teamPick'), op = $('oppPick');
@@ -36,7 +37,7 @@
         const d = document.createElement('div');
         d.className = 'card';
         d.innerHTML = `<div class="nm"><span class="chip" style="background:${t.colors[0]};border-color:${t.colors[1]}"></span>${t.name}</div>` +
-          (small ? '' : `<div class="meta">${t.formation} · ${t.blurb}</div>`);
+          (small ? '' : `<div class="meta">${t.formation} · ${t.blurb}<br>Key players: ${FB.buildSquad(t).filter((p) => p.trait).map((p) => `${p.name} (${TRAIT_NAME[p.trait]})`).join(', ')}</div>`);
         return d;
       };
       const a = card(false); a.onclick = () => { UI.opts.team = i; if (UI.opts.opp === i) UI.opts.opp = (i + 1) % 4; refreshMenu(); };
@@ -371,6 +372,7 @@
     return true;
   }
 
+  const longText = () => `${nm(UI.m.carrier)} is a long passer: loses half as much accuracy beyond ${FB.TUNE.traits.longPasser.from} m`;
   function riskClass(p) { return p >= 0.8 ? 'risk-low' : p >= 0.6 ? 'risk-mid' : p >= 0.4 ? 'risk-high' : 'risk-vhigh'; }
   function riskWord(p) { return p >= 0.85 ? 'Safe' : p >= 0.7 ? 'Some risk' : p >= 0.5 ? 'Risky' : p >= 0.3 ? 'Gamble' : 'Long shot'; }
   const nm = (id) => (id == null ? '?' : UI.m.players[id].name);
@@ -396,13 +398,16 @@
       if (ev.facing) lines.push(`${nm(ev.chaser)} is goal-side of it, facing the play: reacts ${+(FB.TUNE.turnReact - FB.TUNE.faceReact).toFixed(2)}s sooner than if he had to turn`);
       if (ev.trapReact) lines.push(`${nm(ev.chaser)} stepped up for the trap: +${ev.trapReact}s to turn`);
       if (ev.runStart) lines.push(`${nm(ev.runner)} is already running in behind: ${ev.runStart}s head start`);
+      if (ev.long) lines.push(longText());
       const tr = FB.rel(HUMAN, ev.target);
       if (tr.x > 85) lines.push('Gets in behind — big chance if it comes off');
     } else if (a.type === 'lob') {
       head = ev.header ? `Cross for ${nm(ev.recv)}` : `Lofted ball to ${nm(ev.recv)}`;
       big = pct(ev.p);
       lines.push(`Delivery ${pct(ev.exec)}`);
+      if (ev.long) lines.push(longText());
       lines.push(`Aerial duel${ev.duel != null ? ' vs ' + nm(ev.duel) : ''}: ${pct(ev.pWin)}`);
+      for (const id of [ev.recv, ev.duel]) if (id != null && m.players[id].trait === 'aerial') lines.push(`${nm(id)} is strong in the air: a better chance in the duel`);
       if (ev.pClaim > 0.02) lines.push(`Keeper may claim: ${pct(ev.pClaim)}`);
       if (ev.header) lines.push(`<b>Header at goal</b> if won → scores ${pct(ev.shot.xg)}${ev.corner ? ` (a crowded box: ${pct(FB.TUNE.corner.header)} of an open-play header)` : ''} (overall goal ~${pct(ev.p * ev.shot.xg)})`);
       if (ev.zonal) lines.push(`They defend corners zonally: defenders hold spots and attack the ball (+${FB.TUNE.corner.zonalAerial}s in the air). Look for a gap between them.`);
@@ -412,6 +417,7 @@
       if (!ev.challengers.length) lines.push('Nobody can get near you — free carry');
       for (const x of ev.challengers) lines.push(`${nm(x.id)} challenges${x.jockey ? ' (covering: longer reach, half the fouls)' : ''}: tackle ${pct(x.pT)}, foul ${pct(x.pF)}`);
       lines.push(`Heavy touch risk ${pct(ev.lose)}`);
+      if (ev.dribbler) lines.push(`${nm(m.carrier)} is a dribbler: fewer heavy touches, harder to tackle`);
       if (ev.pFoul > 0.02) lines.push(`Win a free kick: ${pct(ev.pFoul)}${FB.inOppBox(FB.rel(HUMAN, ev.target)) ? ' — PENALTY if fouled in the box!' : ''}`);
     } else if (a.type === 'shoot') {
       const s = ev.shot;

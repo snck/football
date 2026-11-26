@@ -48,6 +48,7 @@
     for (const o of ev.outcomes) if (o.p > 0) s += o.p * outcomeValue(m, t, o, ctx);
     if (a.type === 'shoot') s += ev.shot.base > 0.05 ? ctx.shotBias + 0.02 : ctx.shotBias * 0.5;
     if (a.type === 'pass' && m.lastPasser === a.to) s -= 0.003;
+    if (ev.header) s += (ctx.style.cross - 0.5) * CROSS; // some clubs like a cross more than others
     return s;
   }
 
@@ -143,6 +144,8 @@
    * cost is in evaluate(), so it needs none.
    */
   const PLAN = { cover: 0.002, mark: 0.001 };
+  /** How much a club's style.cross (0..1, 0.5 neutral) adds to the value of a cross that ends in a header. */
+  const CROSS = 0.02;
 
   /** chooseRun's thresholds: best pass chance that still counts as "no safe pass", metres of space a forward needs behind the line
    * (and between the line and the goal), and how far from the centre a carrier counts as wide. */
@@ -151,7 +154,7 @@
   const pickSide = (m, mix) => { const r = m.rng(); return r < mix.L ? 'L' : r < mix.L + mix.R ? 'R' : 'C'; };
 
   FB.AI = {
-    V, candidates, scored, evOf, context, PLAN, RUN,
+    V, candidates, scored, evOf, context, PLAN, RUN, CROSS,
     chooseAttack(m) {
       const t = FB.carrier(m).team;
       const list = scored(m);
