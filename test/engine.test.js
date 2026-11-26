@@ -1034,3 +1034,26 @@ test('club style: a club that likes crossing values a cross more; each club defe
   assert.deepEqual(g.cornerDef, [T[3].style.corner, T[2].style.corner]);
   assert.equal(FB.createMatch({ home: T[3], away: T[2], seed: 1, human: 0 }).cornerDef[0], 'man');
 });
+
+test('half-time shape: every outfield player takes a spot in the new shape and its role; the keeper stays; ten men leave one spot empty', () => {
+  const m = FB.createMatch({ home: T[0], away: T[1], seed: 2 });
+  assert.equal(FB.changeShape(m, 0, '3-5-2'), false);
+  assert.ok(FB.changeShape(m, 0, '4-3-3'));
+  const team = m.players.slice(0, 11);
+  const count = (r) => team.filter((p) => p.role === r).length;
+  assert.deepEqual([count('GK'), count('DF'), count('MF'), count('FW')], [1, 4, 3, 3]);
+  const spots = team.map((p) => `${p.u},${p.v}`);
+  assert.equal(new Set(spots).size, 11);
+  assert.deepEqual(team.map((p) => `${p.u},${p.v},${p.role}`).sort(), FB.FORMATIONS['4-3-3'].map((s) => s.join(',')).sort());
+  assert.equal(m.shapes[0], '4-3-3');
+  m.players[14].off = true; // Redmoor down to ten
+  assert.ok(FB.changeShape(m, 1, '5-3-2'));
+  const used = m.players.slice(11).filter((p) => !p.off && p.role !== 'GK').map((p) => `${p.u},${p.v}`);
+  assert.equal(new Set(used).size, 9);
+  // the CPU goes for 4-3-3 when behind at half-time, and stays put otherwise
+  m.score = [1, 0];
+  assert.equal(FB.AI.halfTime(m, 0), null);
+  const h = FB.createMatch({ home: T[0], away: T[1], seed: 2 });
+  h.score = [0, 1];
+  assert.equal(FB.AI.halfTime(h, 0), '4-3-3');
+});

@@ -110,7 +110,7 @@
       teams: [o.home, o.away].map((def, t) => ({ def, t, name: def.name, short: def.short, colors: def.colors, style: def.style })),
       players: [], time: 0, half: 1, added: [null, null], score: [0, 0], poss: 0, carrier: null,
       ball: { x: L / 2, y: W / 2 }, restart: null, setPiece: null, lines: [o.home.style.line, o.away.style.line],
-      cornerDef: [o.home.style.corner || 'man', o.away.style.corner || 'man'],
+      cornerDef: [o.home.style.corner || 'man', o.away.style.corner || 'man'], shapes: [o.home.formation, o.away.formation],
       stats: [mkStats(), mkStats()], feed: [], goals: [], beat: 0, over: false, momentum: 0,
       beaten: new Set(), marks: {}, markOrders: [null, null], runs: [null, null], runMade: null, trapped: null, cover: null, lastPasser: null, lastTouch: 0, halfEvents: { goals: 0, cards: 0, stops: 0 },
       phase: 'idle', history: [],
@@ -857,6 +857,28 @@
       held: save[0], pushed: save[1], rebound: 1 - save[0] - save[1] };
   }
   FB.shotModel = shotModel;
+  /**
+   * Switch a team to another formation (at half-time). Each outfield player takes the free spot in the new shape nearest his
+   * old one, and its role; nobody new comes on, so a team down to ten leaves the spot furthest from anyone empty.
+   */
+  FB.changeShape = function (m, team, formation) {
+    const slots = FB.FORMATIONS[formation];
+    if (!slots || (team !== 0 && team !== 1)) return false;
+    if (m.shapes[team] === formation) return true;
+    const ps = active(m, team).filter((p) => p.role !== 'GK');
+    const free = slots.filter((x) => x[2] !== 'GK');
+    const pairs = [];
+    for (const p of ps) for (const sl of free) pairs.push({ p, sl, d: (p.u - sl[0]) ** 2 + (p.v - sl[1]) ** 2 });
+    pairs.sort((a, b) => a.d - b.d || a.p.slot - b.p.slot);
+    const done = new Set(), taken = new Set();
+    for (const { p, sl } of pairs) {
+      if (done.has(p) || taken.has(sl)) continue;
+      p.u = sl[0]; p.v = sl[1]; p.role = sl[2];
+      done.add(p); taken.add(sl);
+    }
+    m.shapes[team] = formation;
+    return true;
+  };
   /** Metres of distance that count against a long ball's accuracy (a long passer loses less beyond `from` m). */
   function longDist(c, d) {
     const T = TUNE.traits.longPasser;

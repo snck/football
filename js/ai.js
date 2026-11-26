@@ -146,6 +146,8 @@
   const PLAN = { cover: 0.002, mark: 0.001 };
   /** How much a club's style.cross (0..1, 0.5 neutral) adds to the value of a cross that ends in a header. */
   const CROSS = 0.02;
+  /** Half-time: the shape a team that is behind switches to. */
+  const HALF_TIME = { behind: '4-3-3' };
 
   /** chooseRun's thresholds: best pass chance that still counts as "no safe pass", metres of space a forward needs behind the line
    * (and between the line and the goal), and how far from the centre a carrier counts as wide. */
@@ -154,7 +156,7 @@
   const pickSide = (m, mix) => { const r = m.rng(); return r < mix.L ? 'L' : r < mix.L + mix.R ? 'R' : 'C'; };
 
   FB.AI = {
-    V, candidates, scored, evOf, context, PLAN, RUN, CROSS,
+    V, candidates, scored, evOf, context, PLAN, RUN, CROSS, HALF_TIME,
     chooseAttack(m) {
       const t = FB.carrier(m).team;
       const list = scored(m);
@@ -213,6 +215,11 @@
         const back = mates.filter((p) => rel(t, p).x < cr.x + 2 && (rel(t, p).y - 34) * side > 0).sort((a, b) => dist(a, c) - dist(b, c));
         if (back.length && dist(back[0], c) < 25) return { id: back[0].id, kind: 'overlap' };
       }
+      return null;
+    },
+    /** A change of shape at half-time (a formation name, or null to keep it): a team that is behind goes for 4-3-3. */
+    halfTime(m, t) {
+      if (m.score[t] < m.score[1 - t] && m.shapes[t] !== HALF_TIME.behind) return HALF_TIME.behind;
       return null;
     },
     /** Rank attack options for UI hints (top n). */

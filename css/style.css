@@ -105,6 +105,9 @@ main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
 .stack { display: flex; flex-direction: column; gap: 8px; }
 .setting { display: flex; justify-content: space-between; align-items: center; }
 .repscore { font: 800 34px/1.2 system-ui; text-align: center; margin: 6px 0; }
+.repchange { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; font-size: 13px; }
+.repchange .seg { flex-wrap: wrap; }
+.repchange .seg button { padding: 4px 9px; font-size: 13px; }
 .repgoals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; color: #cfd8dc; margin-bottom: 10px; }
 .repgoals div:last-child { text-align: right; }
 table.stats { width: 100%; border-collapse: collapse; font-size: 14px; }

@@ -49,7 +49,12 @@ function playBeat(m, policy = {}) {
       if (ctr && res.result === 'goal') counts.counterGoal = (counts.counterGoal || 0) + 1;
     }
   }
-  return FB.endBeat(m);
+  const ev = FB.endBeat(m);
+  if (ev.includes('halftime')) for (const t of [0, 1]) { // one optional change of shape each
+    const f = (policy.halfTime && policy.halfTime[t]) ? policy.halfTime[t](m) : FB.AI.halfTime(m, t);
+    if (f) FB.changeShape(m, t, f);
+  }
+  return ev;
 }
 
 function playMatch(opts = {}, policy = {}) {

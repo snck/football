@@ -32,7 +32,7 @@ for (let i = 0; i < N; i++) {
     }
     const ev = FB.endBeat(m);
     if (ev.includes('goal')) tot.think += THINK.goal;
-    if (ev.includes('halftime')) tot.think += THINK.half;
+    if (ev.includes('halftime')) { tot.think += THINK.half; const f = FB.AI.halfTime(m, 1); if (f) FB.changeShape(m, 1, f); } // the human's choice is in THINK.half
   }
 }
 const f = (x) => (x / N / 60).toFixed(1);

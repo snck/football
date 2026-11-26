@@ -143,7 +143,13 @@
     flushFeed();
     updateHud();
     if (evs.includes('goal')) await goalCelebration();
-    if (evs.includes('halftime')) { window.Sound.play('whistle3'); await report('half'); UI.R.syncAll(); }
+    if (evs.includes('halftime')) {
+      const cpu = 1 - HUMAN, f = FB.AI.halfTime(m, cpu);
+      UI.cpuShape = f && FB.changeShape(m, cpu, f) ? f : null;
+      window.Sound.play('whistle3'); await report('half');
+      if (token !== loopToken) return;
+      UI.R.syncAll();
+    }
     if (evs.includes('fulltime')) { window.Sound.play('whistle3'); await report('full'); }
     if (evs.includes('added')) window.Sound.play('cheer');
     if (evs.includes('lastAttack')) {
@@ -779,6 +785,20 @@
       note += xgd > 0.5 && d <= 0 ? ' You created the better chances. The finishing let you down.' : xgd < -0.5 && d >= 0 ? ' You rode your luck today.' : '';
     } else note = `Real time so far: ${realMin} min.`;
     $('repNote').textContent = note;
+    const ch = $('repChange'); ch.innerHTML = '';
+    let shape = m.shapes[HUMAN];
+    if (kind === 'half') { // one optional change for the second half: the shape
+      const cpuLine = document.createElement('div');
+      cpuLine.textContent = UI.cpuShape ? `${m.teams[1 - HUMAN].name} change to ${UI.cpuShape} for the second half.` : `${m.teams[1 - HUMAN].name} stay in ${m.shapes[1 - HUMAN]}.`;
+      const row = document.createElement('div'); row.className = 'setting';
+      row.appendChild(document.createTextNode('Your shape for the second half'));
+      const sg = document.createElement('div'); sg.className = 'seg'; row.appendChild(sg);
+      const info = document.createElement('div'); info.className = 'muted';
+      const say = () => { info.textContent = shape === m.shapes[HUMAN] ? `Keep ${shape}.` : `Switch to ${shape}: ${SHAPE_TXT[shape]} Players move to the nearest spot in the new shape.`; };
+      seg(sg, Object.keys(FB.FORMATIONS).map((f) => [f, f]), () => shape, (v) => { shape = v; say(); });
+      say();
+      ch.append(cpuLine, row, info);
+    }
     const btns = $('repBtns'); btns.innerHTML = '';
     $('report').classList.remove('hidden');
     return new Promise((resolve) => {
@@ -786,7 +806,7 @@
       b.className = 'primary';
       if (kind === 'half') {
         b.textContent = 'Start second half ▶';
-        b.onclick = () => { $('report').classList.add('hidden'); UI.wait = null; resolve(); };
+        b.onclick = () => { if (shape !== m.shapes[HUMAN]) FB.changeShape(m, HUMAN, shape); $('report').classList.add('hidden'); UI.wait = null; resolve(); };
         UI.wait = { kind: 'report', resolve: () => b.onclick() };
         btns.appendChild(b);
       } else {
@@ -798,6 +818,8 @@
       }
     });
   }
+  const SHAPE_TXT = { '4-4-2': 'two up front, a flat midfield four.', '4-3-3': 'three forwards, more bodies high up the pitch.',
+    '4-2-3-1': 'two holding midfielders behind three attackers and a lone striker.', '5-3-2': 'five at the back, two forwards to break.' };
   function toMenu() { loopToken++; UI.wait = null; UI.phase = 'menu'; UI.paused = false; $('pause').classList.add('hidden'); $('report').classList.add('hidden'); $('penalty').classList.add('hidden'); $('menu').classList.remove('hidden'); refreshMenu(); }
 
   // ------------------------------------------------------------------ HUD
