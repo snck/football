@@ -16,8 +16,8 @@ when the cycle is done.
 | 4 | B. Lasting marks, costlier trap | **done** (mark target missed, user accepted it, see "Phase 4 result") |
 | 5 | C. Teammate runs | **done** (user dropped the +0.15 run target, see "Phase 5 result") |
 | 6 | D. Through balls (variety only; may be dropped after 3–5) | **done** (Deep − Normal −0.12, user accepted it, see "Phase 6 result") |
-| 7 | Extras: shot types, corners, last attack, identity, half-time choice | todo, **next** |
-| 8 | Final docs, full balance pass, ask about publishing | todo |
+| 7 | Extras: shot types, corners, last attack, identity, half-time choice | **built**, waiting for the user on the open points in "Phase 7 result" |
+| 8 | Final docs, full balance pass, ask about publishing | todo, **next** |
 
 Update this table and the log at the bottom at the end of every phase.
 
@@ -62,7 +62,9 @@ Standing rules:
 | 1000 (diag), 1001 (policies), 1002 (soft-pass count) ×10⁶ | phase 6 tuning |
 | 1010 (diag), 1011 (policies), 1012 (mirror), 1013 (balance) ×10⁶; sim 45 | phase 6 hold-out, both engines (1012 then showed the first version's line problem) |
 | 1015 ×10⁶ (mirror) | phase 6 confirmation of the final rule, both engines |
-| **1020000000+ unused** | |
+| 1020 (shot kinds), 1023 (corners), 1025 (corner mirrors), 1026 (crosses per club), 1028 (half-time mirrors) ×10⁶ | phase 7 tuning |
+| 1021 (policies), 1022 (diag), 1024 (corner conversion), 1029 (balance), 1031–1034 (diag, calibration recheck) ×10⁶; sim 11, 46 | phase 7 hold-out, both engines where compared |
+| **1035000000+ unused** | |
 
 ### Tools added for this cycle
 
@@ -571,6 +573,73 @@ calls Deep "weaker" (it said "slightly weaker").
    mixes at equilibrium an average taker scores about 0.62 (0.688 × 0.9, the factor the engine applies). About 0.06
    penalties per match, so it barely shows in the totals.
 
+### Phase 7 result (2026-11-26)
+
+Built, all five items, one commit each (`26ecc74`, `2fa5253`, `922de68`, `3065924`, `2d903bb`) plus docs and UI polish (`69072e6`):
+1. **Shot kinds** (`TUNE.shot`, all in `shotModel`). Placed is the old shot: 40 seeded matches with only placed shots are identical to the old
+   engine. Driven: goal chance × (1 + 0.025 × (m from goal − 18)) within ×0.8–1.35, blocks ×1.4, on target −6 points, saves held 36/pushed 34/loose
+   30% (placed 52/28/20). Chip: keeper more than 4 m off his line, not from a free kick; × (0.4 + 0.15 × (m off − 4)) up to ×2.2 in place of the
+   off-line bonus, blocks ×0.3, on target = goal + 0.1. The CPU's `saved` value now counts the loose share (unchanged for placed) and it keeps only its
+   best shot among candidates. Which kind is best by goal chance (300 tuning matches): placed 33% of shots (all of them inside 12 m, most of 12–18 m),
+   driven 61% (nearly all beyond 24 m), chip 7%. UI: `5` again cycles the kind, buttons with each goal chance at the top of the shot preview.
+2. **Corners** (`TUNE.corner`). Short option 11 m from the flag (the best header not needed in the box). Header from the delivery × 0.6. Defence is a
+   kept setting, `m.cornerDef`, `FB.setCornerDef`: man (as before), zonal (seven fixed spots, +0.25 s in the air), up2 (two quickest non-defenders on
+   halfway; attackers keep one more back, so one fewer in the box). Human: pause menu, remembered in localStorage, default man. CPU: `style.corner`.
+   No new prompt.
+3. **Last attack** (`TUNE.lastAttack`, in `endBeat` only, so no beat loop changed). Starts when time is up and the team on the ball is past 70 m, or
+   has a corner or a free kick past 74 m; ends when the ball is lost, out (a corner won during it ends it), scored, played back behind 60 m, or after 3
+   beats. Once per half. Feed line, `LAST ATTACK` on the phase banner, and the rule in the hint while it lasts.
+4. **Identity.** `style.cross` biases the CPU by 0.02 × (cross − 0.5) on crosses that end in a header (`AI.CROSS`); crosses per match (300 matches,
+   before → after, item 4 together with traits): Harbour 2.6 → 2.7, Redmoor 3.3 → 2.9, Kestrel 3.0 → 2.6, Coldforge 2.1 → 2.8. `style.corner`: Harbour
+   man, Redmoor and Kestrel zonal, Coldforge up2. Three traits per club (`traits` in `FB.TEAMS`, `TUNE.traits`): aerial +0.3 in the duel sigmoid,
+   long passer half the accuracy loss beyond 25 m (through and lofted), dribbler −2 points heavy touch and tackle ×0.85. Previews name them; team
+   cards list them.
+5. **Half-time shape**: `FB.changeShape` (nearest free spot, greedy, takes the role), offered on the half-time report; CPU `AI.halfTime` = 4-3-3 when
+   behind. Applied after `endBeat` in `game.js`, `runner.js` and `timing.js`. `m.shapes`, `m.cornerDef`, `m.lastAttack` are never touched by a
+   hypothetical plan, so nothing new in the snapshot.
+
+Measured on tuning seeds:
+- Corner setups, mirror (same club both sides, 8,000 matches, 1025000000, ±0.057): zonal − man **−0.066** points (goal difference −0.041 ±0.034),
+  up2 − man +0.021. Zonal's weakness is mostly the short corner: its six-yard-box spots leave the edge of the box free.
+- Half-time shape, mirror against keeping the shape (4,000 each, 1028000000, ±0.081): CPU rule +0.067, 4-4-2 +0.020, **4-3-3 +0.106**, 4-2-3-1 +0.008,
+  5-3-2 −0.035. Per-club rows are ±0.16 and mostly noise (a no-op switch gave Harbour +0.24).
+
+Hold-out (same seeds before and after; "before" = phase 6 build `b8c98f2`, "item 1" = shot kinds only, "after" = all of phase 7):
+
+| | Before | Item 1 | After |
+|---|---|---|---|
+| CPU brain (`policies 1000 1021000000`, ±0.08) | 1.44 | 1.40 | 1.36 |
+| greedy / pass first / dribble first / through first | 1.86 / 1.82 / 1.62 / 1.48 | 1.88 / 1.81 / 1.66 / 1.49 | 1.87 / 1.85 / 1.58 / 1.46 |
+| press + mark + trap / press + trap / hold | 1.20 / 1.18 / 0.66 | 1.27 / 1.22 / 0.66 | 1.21 / 1.14 / 0.66 |
+| run behind / overlap every time | 1.35 / 1.37 | 1.43 / 1.37 | 1.43 / **1.45** |
+| goals/match (`diag 1000 1022000000`) | 2.41 | 2.50 | 2.51 |
+| corners scored directly | 8.7% | 9.2% | **3.9%** |
+| goals by origin: chain / open direct / corner direct | 48.3 / 29.5 / 15.9% | 48.5 / 27.7 / 17.3% | 48.6 / 36.2 / 7.2% |
+| half ends with the ball in the attacking third / dangerous set piece pending | 17.0 / 4.3% | 14.9 / 4.6% | **0.6** / 4.9% |
+| goals/team (`balance 1000 1029000000`, 12,000 matches) | 1.212 | | **1.284** |
+| clubs v mean (±0.033) | HAR +0.018, RED +0.004, KES +0.018, COL −0.040 | | HAR +0.022, RED +0.015, KES −0.041, COL +0.003 |
+| timing Normal | 18.6 | 18.6 | 18.8 |
+
+Corner conversion per setup (`corners.js`, 1,000 matches each, 1024000000, forced on both sides): direct / after a short corner: man 4.2 / 0.6%,
+zonal 4.0 / 1.0%, up2 3.9 / 1.0%. Target "about 4–5%": met.
+Calibration (all of phase 7, 3,000 matches pooled over 1022 and 1031–1034 ×10⁶): placed 22.5/22.5, driven 7.2/7.0, chip 37.8/37.0, header 51.6/51.3, every other
+action within 0.5 points; loose balls within 1.2. (One 1,000-match block showed driven 7.2/6.3; the four fresh blocks put it back.)
+`exploits 300 normal` (W-D-L), before → after: thoughtful 167-55-78 → 162-68-70; shoot on sight 78-92-130 → 73-77-150; dribble only 100-93-107 → 99-91-110
+(item 1 alone: **102-98-100**); hoof 39-101-160 → 34-96-170; safest pass 0-152-148 → 0-156-144; park the bus 36-52-212 → 49-55-196; **always tackle/press
+80-67-153 → 113-59-128**; high line + trap 57-53-190 → 55-58-187. Every one-note script still loses more than it wins in the final build.
+Engine tests 48 → 58. Browser: headless Chrome driven over CDP from the scratchpad (desktop, 375×667, 667×375): shot buttons (key and tap), corner setting in
+the pause menu, last attack (banner, hint, feed), half-time shape choice; no console errors, no sideways scroll. On a phone the shot buttons show but are
+cut off at the bottom of the preview box (it scrolls).
+
+**Open points for the user:**
+- Goals/team rose 1.21 → 1.28 (inside 1.10–1.35). Corner goals halved, but open-play direct goals rose (0.71 → 0.91 a match): driven shots and the last
+  attack. Not tuned.
+- "always tackle/press" went from 80-67-153 to 113-59-128: still loses, but much closer. Not diagnosed (the change came with items 2–5, not item 1).
+- Zonal is a little worse than man (−0.07 ±0.06); raising `zonalAerial` from 0.25 would even it. Redmoor and Kestrel use it.
+- 4-3-3 at half-time measured +0.11 ±0.08 over keeping your shape: at the edge of a dominant choice. Recheck on fresh seeds in phase 8.
+- Two habits now sit at or above the CPU brain on points (run behind 1.43, overlap 1.45 v 1.36, ±0.08 each, so differences ±0.11): within error, as in phase 5.
+- Not built (raise only): Easy rewards shortcuts (DEVLOG known weaknesses); a penalty credits 0.76 xG though an average taker scores about 0.62.
+
 ## Not doing
 
 Pressing fatigue (fatigue is out by design), hidden defensive guesses (break the honest odds), separate throw-in rules
@@ -636,3 +705,7 @@ failed); DESIGN sections 1, 3, 4, 9; README; CLAUDE.md (new state in snapshot, n
   put Deep 0.16 behind Normal on the hold-out; the final rule adds it, as the spec said. Deep is still 0.12 behind (was 0.05): waiting for the user.
   DESIGN, README, how-to text are current; DEVLOG entry waits for phase 8. No CLAUDE.md change needed.
 - 2026-11-26: the user accepted Deep as it is. Phase 6 closed; README wording only ("Deep is weaker"), no game code changed.
+- 2026-11-26: phase 7, see "Phase 7 result" above. The user asked for the next phase. To save time items 2–5 were measured together against the phase 6
+  build (only item 1 has its own hold-out); per-item tuning runs are listed under "Measured on tuning seeds". Scratch tools (`corners.js`, `cmirror.js`,
+  `hmirror.js`, `kinds.js`, `clubs.js`, the CDP driver) lived in the session scratchpad and are not committed. DESIGN, README, how-to text and CLAUDE.md
+  are current; DEVLOG waits for phase 8. Waiting for the user on the open points.
